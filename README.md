@@ -26,7 +26,7 @@ Ovis has been tested with Python 3.10, Torch 2.1.0, Transformers 4.41.1, and Dee
 git clone git@github.com:AIDC-AI/Ovis.git
 conda create -n ovis python=3.10 -y
 conda activate ovis
-cd ovis
+cd Ovis
 pip install -r requirements.txt
 pip install -e .
 ```
