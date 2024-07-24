@@ -8,7 +8,7 @@ accelerate==0.29.0
 pydantic<2,>=1
 markdown2[all]
 numpy==1.24.3
-scikit-learn==1.2.2
+scikit-learn>=1.5.0
 requests
 httpx==0.24.0
 uvicorn
