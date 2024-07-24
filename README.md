@@ -82,7 +82,7 @@ We provide the `meta_file` for each training dataset at [Huggingface](https://hu
 | IAM-7k                                             |                  IAM-line |                   https://huggingface.co/datasets/Teklia/IAM-line |
 | InfographicVQA-24k / infovqa-multi-conversation-5k |                   InfoVQA |                       https://rrc.cvc.uab.es/?ch=17&com=downloads |
 | MathQA-395k                                        |                         - |                                                                 - |
-| MathV-360k                                         |                MathV-360K |   MathV360K	https://huggingface.co/datasets/Zhiqiang007/MathV360K |
+| MathV-360k                                         |                MathV-360K |             https://huggingface.co/datasets/Zhiqiang007/MathV360K |
 | OpenCQA-5k                                         |                   OpenCQA |                                https://github.com/vis-nlp/OpenCQA |
 | PlotQA-157k                                        |                    PlotQA |                           https://github.com/NiteshMethani/PlotQA |
 | Super-CLEVR-30k                                    |               Super-CLEVR |                             https://github.com/Lizw14/Super-CLEVR |
