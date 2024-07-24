@@ -8,6 +8,7 @@ import torch
 from torch import Tensor, LongTensor, IntTensor
 from torch.nn import init
 from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM
+from transformers.generation.utils import GenerateOutput
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled, deepspeed_config
 
 from ovis.model.configuration_ovis import OvisConfig
@@ -37,20 +38,12 @@ class Ovis(OvisPreTrainedModel):
     def __init__(self, config: OvisConfig, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         if kwargs.get('train_from_scratch'):
-            self.llm = AutoModelForCausalLM.from_pretrained(kwargs['llm_name_or_path'], token=None)  # add token for gated model
+            self.llm = kwargs['llm']
             self.generation_config = self.llm.generation_config
             self.config.llm_config = self.llm.config
             self.config.hidden_size = self.llm.config.hidden_size  # for deepspeed auto configuration
-            self.text_tokenizer = AutoTokenizer.from_pretrained(kwargs['llm_name_or_path'], token=None)  # add token for gated model
-            if self.text_tokenizer.pad_token_id is None and kwargs.get('pad_token_id') is not None:
-                self.text_tokenizer.pad_token_id = kwargs['pad_token_id']
-            if kwargs.get('visual_tokenizer_pretrained_path'):
-                self.visual_tokenizer = AutoModel.from_pretrained(kwargs['visual_tokenizer_pretrained_path'],
-                                                                  image_processor_name_or_path=kwargs[
-                                                                      'visual_tokenizer_pretrained_path'])
-            else:
-                self.visual_tokenizer = AutoModel.from_config(self.config.visual_tokenizer_config,
-                                                              train_from_scratch=True)
+            self.text_tokenizer = kwargs['text_tokenizer']
+            self.visual_tokenizer = kwargs['visual_tokenizer']
             self.config.visual_tokenizer_config = self.visual_tokenizer.config
         else:
             self.llm = AutoModelForCausalLM.from_config(self.config.llm_config)
@@ -64,7 +57,6 @@ class Ovis(OvisPreTrainedModel):
             with deepspeed.zero.Init(config_dict_or_path=deepspeed_config()):
                 self.vte = VisualEmbedding(self.config.visual_tokenizer_config.vocab_size, self.config.hidden_size)
         else:
-            self.visual_tokenizer.to(device=self.llm.device)
             self.vte = VisualEmbedding(self.config.visual_tokenizer_config.vocab_size, self.config.hidden_size,
                                        device=self.visual_tokenizer.device, dtype=self.visual_tokenizer.dtype)
 
@@ -84,7 +76,6 @@ class Ovis(OvisPreTrainedModel):
         self._supports_flash_attn_2 = all(
             (self.llm._supports_flash_attn_2, self.visual_tokenizer._supports_flash_attn_2))
         self._supports_sdpa = all((self.llm._supports_sdpa, self.visual_tokenizer._supports_sdpa))
-        self._supports_cache_class = all((self.llm._supports_cache_class, self.visual_tokenizer._supports_cache_class))
 
     def get_text_tokenizer(self):
         return self.text_tokenizer
@@ -134,49 +125,61 @@ class Ovis(OvisPreTrainedModel):
                                                   self.config.conversation_formatter_class)(self.text_tokenizer)
         return self.conversation_formatter
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, pixel_values: List[Optional[torch.Tensor]],
-                labels: Optional[torch.Tensor] = None, **kwargs):
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        labels: Optional[torch.Tensor],
+        pixel_values: List[Optional[torch.Tensor]],
+        **kwargs
+    ):
+        assert self.training, "`forward` can only be used in training. For inference, use `generate`."
         _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
             text_input_ids=input_ids,
             text_attention_masks=attention_mask,
             text_labels=labels,
-            pixel_values=pixel_values,
-            with_kv_cache=kwargs.get('past_key_values') is not None)
+            pixel_values=pixel_values
+        )
         return self.llm(inputs_embeds=inputs_embeds, labels=labels, attention_mask=attention_mask, **kwargs)
 
-    def merge_multimodal(self, text_input_ids: torch.Tensor, text_attention_masks: torch.Tensor,
-                         text_labels: Optional[torch.Tensor], pixel_values: List[Optional[torch.Tensor]],
-                         with_kv_cache: bool = False):
-        if with_kv_cache:
-            return None, self.get_wte()(text_input_ids), text_labels, text_attention_masks
+    def merge_multimodal(
+            self,
+            text_input_ids: torch.Tensor,
+            text_attention_masks: torch.Tensor,
+            text_labels: Optional[torch.Tensor],
+            pixel_values: List[Optional[torch.Tensor]]
+    ):
+        input_device = text_input_ids.device
         if self.training:
             # When training, to be compatible with deepspeed zero, each sample has to include pixel_value tensor.
             # For text-only sample, one can simply use a full zero tensor as pixel_value, which will be ignored
             # (see below in this function); so, the gradient will not be affected.
             num_images = [x.shape[0] for x in pixel_values]
             visual_tokens = self.visual_tokenizer(torch.cat([x for x in pixel_values], dim=0))
-            visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype),
+            visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype, device=input_device),
                                         split_size_or_sections=num_images, dim=0)
-            visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1),
+            visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
                                            split_size_or_sections=num_images, dim=0)
-            visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long) for x in visual_input_ids]
+            visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long, device=input_device) for x in
+                             visual_input_ids]
         else:
             # When inference, sample can include only text with `None` pixel_value
             num_images = [x.shape[0] if x is not None else 0 for x in pixel_values]
             if sum(num_images) > 0:
                 visual_tokens = self.visual_tokenizer(torch.cat([x for x in pixel_values if x is not None], dim=0))
-                visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype),
+                visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype, device=input_device),
                                             split_size_or_sections=num_images, dim=0)
-                visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1),
+                visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
                                                split_size_or_sections=num_images, dim=0)
-                visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long) for x in visual_input_ids]
+                visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long, device=input_device) for x in
+                                 visual_input_ids]
             else:
                 # just placeholders
                 visual_embeds = [None] * len(num_images)
                 visual_input_ids = [None] * len(num_images)
                 visual_labels = [None] * len(num_images)
             # just placeholders
-            text_labels = torch.full(text_input_ids.shape, IGNORE_INDEX, dtype=torch.long, device=text_input_ids.device)
+            text_labels = torch.full(text_input_ids.shape, IGNORE_INDEX, dtype=torch.long, device=input_device)
 
         input_embeds = []
         attention_masks = []
@@ -201,8 +204,8 @@ class Ovis(OvisPreTrainedModel):
                         text_attention_mask[prev_image_token_position + 1:image_token_position])
                     input_embed_parts.append(visual_embed[index])
                     attention_mask_parts.append(
-                        torch.ones_like(visual_label[index], device=text_label.device, dtype=torch.bool))
-                    label_parts.append(visual_label[index].to(device=text_label.device))
+                        torch.ones_like(visual_label[index], dtype=torch.bool))
+                    label_parts.append(visual_label[index])
                     prev_image_token_position = image_token_position
                 if prev_image_token_position + 1 < text_input_id.shape[0]:
                     input_embed_parts.append(
@@ -236,18 +239,18 @@ class Ovis(OvisPreTrainedModel):
         return visual_input_ids, batch_input_embeds, batch_labels, batch_attention_mask
 
     def save_pretrained(
-            self,
-            save_directory: Union[str, os.PathLike],
-            is_main_process: bool = True,
-            state_dict: Optional[dict] = None,
-            save_function: Callable = torch.save,
-            push_to_hub: bool = False,
-            max_shard_size: Union[int, str] = "5GB",
-            safe_serialization: bool = True,
-            variant: Optional[str] = None,
-            token: Optional[Union[str, bool]] = None,
-            save_peft_format: bool = True,
-            **kwargs,
+        self,
+        save_directory: Union[str, os.PathLike],
+        is_main_process: bool = True,
+        state_dict: Optional[dict] = None,
+        save_function: Callable = torch.save,
+        push_to_hub: bool = False,
+        max_shard_size: Union[int, str] = "5GB",
+        safe_serialization: bool = True,
+        variant: Optional[str] = None,
+        token: Optional[Union[str, bool]] = None,
+        save_peft_format: bool = True,
+        **kwargs,
     ):
         super().save_pretrained(save_directory,
                                 is_main_process=is_main_process,
@@ -267,27 +270,24 @@ class Ovis(OvisPreTrainedModel):
         # self.get_visual_tokenizer().get_image_processor().save_pretrained(visual_tokenizer_directory)
 
     # TODO: support batch generation
-    def prepare_inputs_for_generation(
-            self, input_ids, pixel_values, attention_mask, past_key_values=None, inputs_embeds=None, **kwargs):
-        if past_key_values is not None:
-            input_ids = input_ids[:, -1:]
-            attention_mask = attention_mask[:, -1:]
-
-        # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
-        if inputs_embeds is not None and past_key_values is None:
-            model_inputs = {"inputs_embeds": inputs_embeds}
-        else:
-            model_inputs = {"input_ids": input_ids}
-
-        model_inputs.update(
-            {
-                "past_key_values": past_key_values,
-                "use_cache": kwargs.get("use_cache"),
-                "attention_mask": attention_mask,
-                "pixel_values": pixel_values
-            }
+    def generate(
+        self,
+        inputs: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Union[GenerateOutput, torch.LongTensor]:
+        assert inputs.shape[0] == 1, 'Currently, only support `batch_size=1`'
+        _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
+            text_input_ids=inputs,
+            text_attention_masks=kwargs.pop('attention_mask'),
+            text_labels=None,
+            pixel_values=kwargs.pop('pixel_values')
         )
-        return model_inputs
+        if getattr(self.generation_config, 'cache_implementation') == 'hybrid':  # mainly for Gemma2
+            kwargs['past_key_values'] = self.get_llm()._get_cache('hybrid', getattr(kwargs, "num_beams", 1), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
+            self.get_llm()._supports_cache_class = True
+            kwargs['cache_implementation'] = None
+
+        return self.llm.generate(inputs=None, inputs_embeds=inputs_embeds, attention_mask=attention_mask, **kwargs)
 
 
 AutoConfig.register("ovis", OvisConfig)

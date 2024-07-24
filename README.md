@@ -1,12 +1,13 @@
 # Ovis: Structural Embedding Alignment for Multimodal Large Language Model
 
-Ovis is a novel Multimodal Large Language Model (MLLM) architecture, designed to structurally align visual and textual embeddings. For a comprehensive introduction, please refer to the [Ovis paper](https://arxiv.org/abs/2405.20797).
+Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architecture, designed to structurally align visual and textual embeddings. For a comprehensive introduction, please refer to the [Ovis paper](https://arxiv.org/abs/2405.20797).
 
 <div style="text-align: center;">
   <img style="max-width: 100%;" src="docs/ovis-illustration.png" alt="Ovis Illustration"/>
 </div>
 
 ## Release
+- [07/24] 🔥 Announcing Ovis1.5, the latest version of Ovis! As always, Ovis1.5 remains fully open-source: we release the [training datasets](https://huggingface.co/datasets/AIDC-AI/Ovis-dataset), [training & inference codes](https://github.com/AIDC-AI/Ovis), and [model weights](https://huggingface.co/AIDC-AI/Ovis1.5-Llama3-8B) for reproducible transparency and community collaboration.
 - [06/14] 🔥 We release the [paper](https://arxiv.org/pdf/2405.20797), [code](https://github.com/AIDC-AI/Ovis), [models](https://huggingface.co/AIDC-AI/Ovis-Clip-Llama3-8B), and [datasets](https://huggingface.co/datasets/AIDC-AI/Ovis-dataset).
 
 ## Contents
@@ -21,7 +22,7 @@ Ovis is a novel Multimodal Large Language Model (MLLM) architecture, designed to
 - [License](#license)
 
 ## Install
-Ovis has been tested with Python 3.10, Torch 2.1.0, Transformers 4.41.1, and DeepSpeed 0.14.0. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before training or inference, please install Ovis as follows.
+Ovis has been tested with Python 3.10, Torch 2.1.0, Transformers 4.42.4, and DeepSpeed 0.14.0. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before training or inference, please install Ovis as follows.
 ```bash
 git clone git@github.com:AIDC-AI/Ovis.git
 conda create -n ovis python=3.10 -y
@@ -32,24 +33,34 @@ pip install -e .
 ```
 
 ## Model
-Ovis can be instantiated with popular LLMs (e.g., Qwen, Llama3). We provide the following pretrained Ovis MLLMs:
+Ovis can be instantiated with popular LLMs (e.g., Llama3, Gemma2). We provide the following pretrained Ovis MLLMs:
 
-| Ovis MLLMs            | ViT   | LLM                |                              Download                               | MMStar | MMB-EN | MMB-CN | MMMU-Val | MMMU-Test | MathVista-Mini |  MME | HallusionBench | RealWorldQA | 
-|:----------------------|:------|:-------------------|:-------------------------------------------------------------------:|-------:|-------:|-------:|---------:|----------:|---------------:|-----:|---------------:|------------:|
-| Ovis-Clip-Qwen1.5-7B  | Clip  | Qwen1.5-7B-Chat    | [Huggingface](https://huggingface.co/AIDC-AI/Ovis-Clip-Qwen1_5-7B)  |   44.3 |   75.1 |   70.2 |     39.7 |      37.7 |           41.4 | 1882 |           56.4 |        60.0 |
-| Ovis-Clip-Llama3-8B   | Clip  | Llama3-8B-Instruct |  [Huggingface](https://huggingface.co/AIDC-AI/Ovis-Clip-Llama3-8B)  |   49.5 |   77.4 |   72.8 |     44.7 |      39.0 |           40.8 | 2009 |           61.1 |        57.9 |
-| Ovis-Clip-Qwen1.5-14B | Clip  | Qwen1.5-14B-Chat   | [Huggingface](https://huggingface.co/AIDC-AI/Ovis-Clip-Qwen1_5-14B) |   48.5 |   78.4 |   76.6 |     46.7 |      40.7 |           43.4 | 1961 |           57.6 |        62.7 |
+| Ovis MLLMs               | ViT         | LLM                |                          Model Weights                          | 
+|:-------------------------|:------------|:-------------------|:---------------------------------------------------------------:|
+| Ovis1.5-Llama3-8B        | Siglip-400M | Llama3-8B-Instruct | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.5-Llama3-8B) |
 
 ## Performance
-We evaluate Ovis across various multimodal benchmarks using [VLMEvalKit](https://github.com/open-compass/VLMEvalKit). The evaluation results show that Ovis outperforms open-source MLLMs within the same parameter tier across various benchmarks, and
-Ovis-Clip-Qwen1.5-14B also surpasses the high-resource proprietary model Qwen-VL-Plus overall.
+We evaluate Ovis across various multimodal benchmarks using [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) and compare its performance to leading MLLMs with similar parameter scales.
 
-<div style="text-align: center;">
-  <img style="max-width: 100%;" src="docs/performance.png" alt="Ovis Performance"/>
-</div>
+|                   | MiniCPM-Llama3-V2.5 |                                                 Ovis1.5-Llama3-8B |
+|:------------------|--------------------:|------------------------------------------------------------------:|
+| ViT               |         Siglip-400M |                                                       Siglip-400M |
+| LLM               |  Llama3-8B-Instruct |                                                Llama3-8B-Instruct |
+| MMTBench-VAL      |                57.6 |                                                          **60.7** |
+| MMBench-EN-V1.1   |                  74 |                                                          **78.2** |
+| MMBench-CN-V1.1   |                70.1 |                                                          **75.2** |
+| MMStar            |                51.8 |                                                          **57.2** |
+| MMMU-Val          |                45.8 |                                                          **48.6** |
+| MathVista-Mini    |                54.3 |                                                          **62.4** |
+| HallusionBenchAvg |                42.4 |                                                          **44.5** |
+| AI2D              |                78.4 |                                                          **82.5** |
+| OCRBench          |                 725 |                                                           **743** |
+| MMVet             |            **52.8** |                                                              52.2 |
+| RealWorldQA       |                63.5 |                                                          **64.6** |
+
 
 ## Dataset
-All training datasets are summarized in the JSON file located at `ovis/train/dataset_info.json`. Each dataset entry includes the following attributes:
+All training datasets are summarized in the JSON file located at `ovis/train/dataset/dataset_info_v1_5.json`. Each dataset entry includes the following attributes:
 
 - **`meta_file`**: This file contains a collection of samples where each sample consists of text and (optionally) image. The text data is embedded directly within the `meta_file`, while the image is represented by its filename. This filename refers to the image file located in the `image_dir`.
 - **`image_dir`**: The directory where the images are stored.
@@ -57,51 +68,75 @@ All training datasets are summarized in the JSON file located at `ovis/train/dat
 
 We provide the `meta_file` for each training dataset at [Huggingface](https://huggingface.co/datasets/AIDC-AI/Ovis-dataset). The images can be downloaded from their respective sources listed below.
 
-| dataset name                   |      image dir |                                                  image source |
-|:-------------------------------|---------------:|--------------------------------------------------------------:|
-| coyo-10m                       |       coyo_10m |              `image_url` of each sample in `coyo-10m.parquet` |
-| llava-pretrain-558k            | llava_pretrain |     https://huggingface.co/datasets/liuhaotian/LLaVA-Pretrain |
-| sharegpt4v-pretrain-82k        |     sharegpt4v |           https://huggingface.co/datasets/Lin-Chen/ShareGPT4V |
-| allava-caption-laion-4v-485k   |   allava_laion | https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
-| allava-caption-vflan-4v-203k   |   allava_vflan | https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
-| laion-description-11k          |     ovis_laion |          https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
-| cc12m-description-1m           |     ovis_cc12m |          https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
-| scienceqa-train-val-17k        |      scienceqa |                                   https://scienceqa.github.io |
-| textvqa-train-35k              |        textvqa |                                           https://textvqa.org |
-| allava-instruct-laion-4v-485k  |   allava_laion | https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
-| allava-instruct-vflan-4v-203k  |   allava_vflan | https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
-| arxivqa-100k                   |        arxivqa |         https://huggingface.co/datasets/MMInstruction/ArxivQA |
-| q-instruct-198k                |     q_instruct |        https://huggingface.co/datasets/q-future/Q-Instruct-DB |
-| llava-finetune-665k            | llava_finetune |                          https://github.com/haotian-liu/LLaVA |
-| geo-177k                       |            geo |              https://huggingface.co/datasets/Luckyjhg/Geo170K |
-| lrv-and-chart-instruction-343k |  lrv_and_chart |                  https://github.com/FuxiaoLiu/LRV-Instruction |
-| synthdog-en-ocr-200k           |       synthdog |    https://huggingface.co/datasets/naver-clova-ix/synthdog-en |
-| allava-evol-instruct-143k      |              - |                                                             - |
-| cc12m-qa-387k                  |     ovis_cc12m |          https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| dataset name                                       |                 image dir |                                                      image source |
+|:---------------------------------------------------|--------------------------:|------------------------------------------------------------------:|
+| pixelprose-14m                                     |            pixelprose-14m |            `image_url` of each sample in `pixelprose-14m.parquet` |
+| wikipedia-348k                                     |            wikipedia-348k |            `image_url` of each sample in `wikipedia-348k.parquet` |
+| ocr-469k                                           |                  ocr-469k |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| allava-*                                           |                    allava |     https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
+| cc12m-description-387k / cc12m-qa-387k             |                ovis_cc12m |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| A-OKVQA-18k / vsr-train-dev-12k                    |                      COCO |                                           https://cocodataset.org |
+| CLEVR-MATH-85k                                     |                CLEVR-MATH |                           https://github.com/dali-does/clevr-math |
+| FigureQA-100k                                      |                  FigureQA | https://www.microsoft.com/en-us/research/project/figureqa-dataset |
+| Geometry-2k                                        |                Geometry3K |                             https://github.com/lupantech/InterGPS |
+| IAM-7k                                             |                  IAM-line |                   https://huggingface.co/datasets/Teklia/IAM-line |
+| InfographicVQA-24k / infovqa-multi-conversation-5k |                   InfoVQA |                       https://rrc.cvc.uab.es/?ch=17&com=downloads |
+| MathQA-395k                                        |                         - |                                                                 - |
+| MathV-360k                                         |                MathV-360K |   MathV360K	https://huggingface.co/datasets/Zhiqiang007/MathV360K |
+| OpenCQA-5k                                         |                   OpenCQA |                                https://github.com/vis-nlp/OpenCQA |
+| PlotQA-157k                                        |                    PlotQA |                           https://github.com/NiteshMethani/PlotQA |
+| Super-CLEVR-30k                                    |               Super-CLEVR |                             https://github.com/Lizw14/Super-CLEVR |
+| Symbolic-Reasoning-TabMW-31k                       | Symbolic-Reasoning-TabMWP |                                        https://promptpg.github.io |
+| ViQuAE-2k                                          |                    ViQuAE |                              https://github.com/PaulLerner/ViQuAE |
+| ai2d-mc-15k                                        |                      AI2D |                                 https://allenai.org/data/diagrams |
+| c7s-*                                              |              Cambrian_10M |          https://huggingface.co/datasets/nyu-visionx/Cambrian-10M |
+| doclaynet-65k                                      |                 DocLayNet |                   https://huggingface.co/datasets/ds4sd/DocLayNet |
+| doclie-real-100k                                   |                    docile |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| dtvqa-27k                                          |                    DT-VQA |                           https://github.com/ShuoZhang2003/DT-VQA |
+| funsd-1k                                           |                     funsd |                            https://guillaumejaume.github.io/FUNSD |
+| hme-74k                                            |                       HME |                                https://github.com/Phymond/HME100K |
+| hwl-eng-10k                                        |               HWL_OCR_ENG |                                https://ai.100tal.com/openData/ocr |
+| icqa-train-val-40k                                 |                    iconqa |                                         https://iconqa.github.io/ |
+| kvqa-25k                                           |                      KVQA |                       http://malllabiisc.github.io/resources/kvqa |
+| lrv-instruct-and-chart-343k                        |                       LRV |                      https://github.com/FuxiaoLiu/LRV-Instruction |
+| mmc-base-410k                                      |                       MMC |                       https://huggingface.co/datasets/xywang1/MMC |
+| mmmath-6k                                          |                    mmmath |                   https://huggingface.co/datasets/THU-KEG/MM_Math |
+| ocr-vqa-multi-conversation-207k                    |                   ocr-vqa |                                        https://ocr-vqa.github.io/ |
+| okvqa-14k                                          |                    OK-VQA |                              https://okvqa.allenai.org/index.html |
+| orandCAR-5k                                        |                 ORAND-CAR |                               https://www.orand.cl/icfhr2014-hdsr |
+| poie-9k                                            |                      poie |                                   https://github.com/jfkuang/cfam |
+| sroie-3k                                           |                     sroie |       https://www.kaggle.com/datasets/urbikn/sroie-datasetv2/data |
+| stvqa-78k                                          |                    ST-VQA |                                     https://rrc.cvc.uab.es/?ch=11 |
+| tqa-train-34k                                      |                   textvqa |                                       https://textvqa.org/dataset |
+| tqa-train-val-20k                                  |                       TQA |                                      https://allenai.org/data/tqa |
+| visualdialog-125k                                  |              VisualDialog |                                          https://visualdialog.org |
+| vqa-v2-multi-conversation-184k                     |                       VQA |                                              https://visualqa.org |
 
-Below is an example of the folder structure consistent with `ovis/train/dataset_info.json`. You can alter the folder structure as needed and modify `ovis/train/dataset_info.json` accordingly.
+Below is an example of the folder structure consistent with `dataset_info_v1_5.json`. You can alter the folder structure as needed and modify `dataset_info_v1_5.json` accordingly.
 ```
 |-- mllm_datasets
     |-- meta_files
-        |-- coyo-10m.parquet
-        |-- llava-pretrain-558k.json
-        |-- sharegpt4v-pretrain-82k.json
-        |-- allava-caption-laion-4v-485k.json
-        ...
+        |-- v1
+        |-- v1_5
+            |-- pixelprose-14m.parquet
+            |-- cc12m-description-387k.json
+            |-- A-OKVQA-18k.json
+            |-- CLEVR-MATH-85k.json
+            ...
     |-- images
-        |-- coyo_10m
-        |-- llava_pretrain
-        |-- sharegpt4v
-        |-- allava_laion
+        |-- pixelprose-14m
+        |-- ovis_cc12m
+        |-- COCO
+        |-- CLEVR-MATH
         ...
 ```
 
 ## Train
 Ovis is trained in three stages, with each stage's training scripts located in the `scripts` directory. Before starting the training, ensure you properly set the `ROOT` variable in the scripts. Below are the commands to train Ovis-Clip-Qwen1.5-7B:
 ```bash
-bash scripts/v1/Ovis-Clip-Qwen1.5-7B-S1.sh
-bash scripts/v1/Ovis-Clip-Qwen1.5-7B-S2.sh
-bash scripts/v1/Ovis-Clip-Qwen1.5-7B-S3.sh
+bash scripts/v1_5/Ovis1.5-Llama3-8B-S1.sh
+bash scripts/v1_5/Ovis1.5-Llama3-8B-S2.sh
+bash scripts/v1_5/Ovis1.5-Llama3-8B-S3.sh
 ```
 
 ## Inference
@@ -113,7 +148,7 @@ image = Image.open('IMAGE_PATH')
 text = 'PROMPT'
 runner_args = RunnerArguments(model_path='MODEL_PATH')
 runner = OvisRunner(runner_args)
-generation = runner.run(image, text)
+generation = runner.run([image, text])
 ```
 Based on [Gradio](https://github.com/gradio-app/gradio), Ovis can also be accessed via a web user interface:
 ```bash

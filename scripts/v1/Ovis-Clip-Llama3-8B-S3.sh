@@ -6,6 +6,7 @@ EXPNAME="${0##*/}"; EXPNAME="${EXPNAME%.sh}"
 deepspeed ovis/train/train.py \
         --deepspeed scripts/zero3.json \
         --stage 3 \
+        --dataset_info dataset_info_v1 \
         --dataset_names 'scienceqa-train-val-17k|textvqa-train-35k|allava-instruct-laion-4v-485k|allava-instruct-vflan-4v-203k|arxivqa-100k|q-instruct-198k|llava-finetune-665k|geo-177k|lrv-and-chart-instruction-343k|synthdog-en-ocr-200k|allava-evol-instruct-143k|cc12m-qa-387k' \
         --ovis_pretrained_path $ROOT/checkpoints/ovis/Ovis-Clip-Llama3-8B-S2 \
         --train_modules 'all' \

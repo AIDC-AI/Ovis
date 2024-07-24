@@ -12,12 +12,10 @@ class Server:
         self.runner = runner
 
     def __call__(self, image, text):
-        if image is not None:
-            response = self.runner.run(image, text)
-            # output = f'prompt:\n{response["prompt"]}\n\noutput:\n{response["output"]}'
-            output = response["output"]
-        else:
-            output = "No image uploaded. Please upload an image and retry."
+        inputs = [image] if image is not None else []
+        inputs.append(text)
+        response = self.runner.run(inputs)
+        output = response["output"]
         return output
 
 

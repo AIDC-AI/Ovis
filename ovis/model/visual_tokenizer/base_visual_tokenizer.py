@@ -2,7 +2,7 @@ from typing import Union, Optional
 
 import PIL.Image
 import torch
-from torch.nn.functional import softmax, gumbel_softmax
+import torch.nn.functional as F
 from transformers import PretrainedConfig, PreTrainedModel, AutoImageProcessor, AutoModel, AutoConfig
 
 
@@ -16,6 +16,7 @@ class BaseVisualTokenizerConfig(PretrainedConfig):
                  drop_cls_token=False,
                  backbone_config: Optional[Union[PretrainedConfig, dict]] = None,
                  hidden_stride: int = 1,
+                 hd_booster: Optional[str] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.vocab_size = vocab_size
@@ -36,6 +37,7 @@ class BaseVisualTokenizerConfig(PretrainedConfig):
                 backbone_config = AutoConfig.for_model(model_type, **backbone_config)
         self.backbone_config = backbone_config
         self.hidden_stride = hidden_stride
+        self.hd_booster = hd_booster
 
 
 class BaseVisualTokenizer(PreTrainedModel):
@@ -74,6 +76,15 @@ class BaseVisualTokenizer(PreTrainedModel):
     def get_image_processor(self):
         return self.image_processor
 
+    def get_zero_pixel_values(self, n=1):
+        height, width = self.get_image_size()
+        if self.config.hd_booster is None:
+            return torch.zeros(n, 3, height, width)
+        elif self.config.hd_booster in ['s2wrapper', 's2wrapper-adaptive']:
+            return torch.zeros(n, 3*5, height, width)
+        else:
+            raise ValueError(f'Unsupported hd_booster {self.config.hd_booster}')
+
     def get_head(self):
         return self.head
 
@@ -81,43 +92,64 @@ class BaseVisualTokenizer(PreTrainedModel):
         raise NotImplementedError
 
     def preprocess_image(self, image: PIL.Image.Image, convert_to_rgb=True):
+        def _preprocess(img: PIL.Image.Image):
+            # first resize and preprocess
+            sides = self.get_image_size()
+            if sides[0] != sides[1]:
+                raise ValueError('get_image_size() returns non-square size')
+            side = sides[0]
+
+            w, h = img.size
+            if w == h:
+                new_width = new_height = side
+            elif w > h:
+                new_width = side
+                new_height = int(h / w * new_width)
+            else:
+                new_height = side
+                new_width = int(w / h * new_height)
+            new_size = dict(height=new_height, width=new_width)
+            pixel_values = self.image_processor.preprocess(img, size=new_size, return_tensors='pt')['pixel_values']
+
+            # then pad to square
+            square_values = torch.zeros([1, 3, side, side], dtype=pixel_values.dtype, device=pixel_values.device)
+            new_height, new_width = pixel_values.shape[2:]
+            if new_height == new_width:
+                square_values[:, :, :, :] = pixel_values
+            elif new_height > new_width:
+                from_index = (side - new_width) // 2
+                square_values[:, :, :, from_index:from_index + new_width] = pixel_values
+            else:
+                from_index = (side - new_height) // 2
+                square_values[:, :, from_index:from_index + new_height, :] = pixel_values
+
+            return square_values
+
         if convert_to_rgb and image.mode != 'RGB':
             image = image.convert('RGB')
 
-        # first resize and preprocess
-        sides = self.get_image_size()
-        if sides[0] != sides[1]:
-            raise ValueError('get_image_size() returns non-square size')
-        side = sides[0]
-
-        width, height = image.size
-        if width == height:
-            new_width = new_height = side
-        elif width > height:
-            new_width = side
-            new_height = int(height / width * new_width)
+        if self.config.hd_booster is None:
+            return _preprocess(image)  # [1, 3, side, side]
+        elif self.config.hd_booster in ['s2wrapper', 's2wrapper-adaptive']:
+            width, height = image.size
+            is_low_resolution = height < self.get_image_size()[0] * 1.5 or width < self.get_image_size()[1] * 1.5
+            if self.config.hd_booster == 's2wrapper-adaptive' and is_low_resolution:
+                values = self.get_zero_pixel_values() + torch.inf
+                values[0][:3] = _preprocess(image)[0]
+            else:
+                center_x, center_y = width // 2, height // 2
+                image_top_left = image.crop((0, 0, center_x, center_y))
+                image_top_right = image.crop((center_x, 0, width, center_y))
+                image_bottom_left = image.crop((0, center_y, center_x, height))
+                image_bottom_right = image.crop((center_x, center_y, width, height))
+                imgs = [image, image_top_left, image_top_right, image_bottom_left, image_bottom_right]
+                values = torch.cat([_preprocess(img) for img in imgs], dim=1)
+            return values  # [1, 3*5, side, side]
         else:
-            new_height = side
-            new_width = int(width / height * new_height)
-        new_size = dict(height=new_height, width=new_width)
-        pixel_values = self.image_processor.preprocess(image, size=new_size, return_tensors='pt')['pixel_values']
+            raise ValueError(f'Unsupported hd_booster {self.config.hd_booster}')
 
-        # then pad to square
-        square_values = torch.zeros([1, 3, side, side], dtype=pixel_values.dtype, device=pixel_values.device)
-        new_height, new_width = pixel_values.shape[2:]
-        if new_height == new_width:
-            square_values[:, :, :, :] = pixel_values
-        elif new_height > new_width:
-            from_index = (side - new_width) // 2
-            square_values[:, :, :, from_index:from_index + new_width] = pixel_values
-        else:
-            from_index = (side - new_height) // 2
-            square_values[:, :, from_index:from_index + new_height, :] = pixel_values
-
-        return square_values
-
-    def get_layer_norm(self):
-        return self.layer_norm
+    def get_backbone_layer(self, index):
+        return self.backbone.vision_model.encoder.layers[index]
 
     def tokenize(self, logits):
         def st_argmax(y_soft, dim):  # straight-through softmax
@@ -127,9 +159,9 @@ class BaseVisualTokenizer(PreTrainedModel):
             return ret
 
         if self.config.tokenize_function == 'softmax':
-            tokens = softmax(logits, dim=-1)
+            tokens = F.softmax(logits, dim=-1)
         elif self.config.tokenize_function == 'gumbel_argmax':
-            tokens = gumbel_softmax(logits, tau=self.config.tau, hard=True)
+            tokens = F.gumbel_softmax(logits, tau=self.config.tau, hard=True)
         elif self.config.tokenize_function == 'st_argmax':
             tokens = st_argmax(logits, dim=-1)
         else:

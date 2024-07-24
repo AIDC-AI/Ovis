@@ -1,1 +1,2 @@
 from .visual_tokenizer.clip_visual_tokenizer import ClipVisualTokenizerConfig, ClipVisualTokenizer
+from .visual_tokenizer.siglip_visual_tokenizer import SiglipVisualTokenizerConfig, SiglipVisualTokenizer

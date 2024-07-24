@@ -13,6 +13,21 @@ class ConversationFormatter(ABC):
         tokenizer_type = type(tokenizer).__name__
         assert tokenizer_type in self.support_tokenizer_types, \
             f'Invalid tokenizer type, expected one from `{self.support_tokenizer_types}`, but got `{tokenizer_type}`'
+        self.tokenizer = tokenizer
+        self.image_symbol = IMAGE_TOKEN
+        self.image_token_index = IMAGE_TOKEN_INDEX
+        self.ignore_index = IGNORE_INDEX
+
+    def _tokenize_with_image_symbol(self, text):
+        text_chunks = [self.tokenizer(chunk, add_special_tokens=False).input_ids for chunk in
+                       text.split(self.image_symbol)]
+        token_ids = []
+        num_chuck = len(text_chunks)
+        for i, chunk in enumerate(text_chunks):
+            token_ids.extend(chunk)
+            if i < num_chuck - 1:
+                token_ids.append(self.image_token_index)
+        return token_ids
 
     @abstractmethod
     def format(self, conversations: List[Dict], generation_preface=None):
@@ -28,29 +43,14 @@ class QwenConversationFormatter(ConversationFormatter):
 
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
-        self.tokenizer = tokenizer
         self.from2role = {
             "system": "<|im_start|>system\n",
             "human": "<|im_start|>user\n",
             "gpt": "<|im_start|>assistant\n",
         }
         self.gpt_token_num = None
-        self.im_end = "<|im_end|>"
-        self.image_symbol = IMAGE_TOKEN
-        self.image_token_index = IMAGE_TOKEN_INDEX
-        self.ignore_index = IGNORE_INDEX
+        self.im_end = "<|im_end|>\n"
         self.default_system_prompt = "You are a helpful assistant."
-
-    def _tokenize_with_image_symbol(self, text):
-        text_chunks = [self.tokenizer(chunk, add_special_tokens=False).input_ids for chunk in
-                       text.split(self.image_symbol)]
-        token_ids = []
-        num_chuck = len(text_chunks)
-        for i, chunk in enumerate(text_chunks):
-            token_ids.extend(chunk)
-            if i < num_chuck - 1:
-                token_ids.append(self.image_token_index)
-        return token_ids
 
     def format(self, conversations: List[Dict], generation_preface=None):
         if self.gpt_token_num is None:
@@ -79,14 +79,13 @@ class QwenConversationFormatter(ConversationFormatter):
             text = role + message
             if i < num_conversation - 1 or generation_preface is None:
                 text += self.im_end
-            if i < num_conversation - 1:
-                text += '\n'
             prompt += text
             token_ids = self._tokenize_with_image_symbol(text)
             input_ids.extend(token_ids)
             label_ids = [self.ignore_index] * len(token_ids)
-            if frm == "gpt":
-                label_ids[self.gpt_token_num:] = token_ids[self.gpt_token_num:]
+            if frm == "gpt" and generation_preface is None:
+                # learning `\n` following `im_end` is meaningless, so the last `\n` token is ignored in label
+                label_ids[self.gpt_token_num:-1] = token_ids[self.gpt_token_num:-1]
             labels.extend(label_ids)
 
         assert self._tokenize_with_image_symbol(prompt) == input_ids
@@ -110,7 +109,6 @@ class Llama3ConversationFormatter(ConversationFormatter):
 
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
-        self.tokenizer = tokenizer
         self.from2role = {
             "system": "<|start_header_id|>system<|end_header_id|>\n\n",
             "human": "<|start_header_id|>user<|end_header_id|>\n\n",
@@ -118,23 +116,9 @@ class Llama3ConversationFormatter(ConversationFormatter):
         }
         self.gpt_token_num = None
         self.im_end = "<|eot_id|>"
-        self.image_symbol = IMAGE_TOKEN
-        self.image_token_index = IMAGE_TOKEN_INDEX
-        self.ignore_index = IGNORE_INDEX
         self.default_system_prompt = "You are a helpful and honest multimodal assistant."
         self.bos_token = "<|begin_of_text|>"
         self.bos_token_ids = None
-
-    def _tokenize_with_image_symbol(self, text):
-        text_chunks = [self.tokenizer(chunk, add_special_tokens=False).input_ids for chunk in
-                       text.split(self.image_symbol)]
-        token_ids = []
-        num_chuck = len(text_chunks)
-        for i, chunk in enumerate(text_chunks):
-            token_ids.extend(chunk)
-            if i < num_chuck - 1:
-                token_ids.append(self.image_token_index)
-        return token_ids
 
     def format(self, conversations: List[Dict], generation_preface=None):
         if self.gpt_token_num is None:

@@ -1,96 +1,96 @@
 {
     "coyo-10m": {
-        "meta_file": "/data/mllm_datasets/meta_files/coyo-10m.parquet",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/coyo-10m.parquet",
         "image_dir": "/data/mllm_datasets/images/coyo_10m",
         "data_format": "caption"
     },
     "llava-pretrain-558k": {
-        "meta_file": "/data/mllm_datasets/meta_files/llava-pretrain-558k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/llava-pretrain-558k.json",
         "image_dir": "/data/mllm_datasets/images/llava_pretrain",
         "data_format": "conversation"
     },
     "sharegpt4v-pretrain-82k.json": {
-        "meta_file": "/data/mllm_datasets/meta_files/sharegpt4v-pretrain-82k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/sharegpt4v-pretrain-82k.json",
         "image_dir": "/data/mllm_datasets/images/sharegpt4v",
         "data_format": "conversation"
     },
     "allava-caption-laion-4v-485k": {
-        "meta_file": "/data/mllm_datasets/meta_files/allava-caption-laion-4v-485k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/allava-caption-laion-4v-485k.json",
         "image_dir": "/data/mllm_datasets/images/allava_laion",
         "data_format": "conversation"
     },
     "allava-caption-vflan-4v-203k": {
-        "meta_file": "/data/mllm_datasets/meta_files/allava-caption-vflan-4v-203k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/allava-caption-vflan-4v-203k.json",
         "image_dir": "/data/mllm_datasets/images/allava_vflan",
         "data_format": "conversation"
     },
     "laion-description-11k": {
-        "meta_file": "/data/mllm_datasets/meta_files/laion-description-11k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/laion-description-11k.json",
         "image_dir": "/data/mllm_datasets/images/ovis_laion",
         "data_format": "conversation"
     },
     "cc12m-description-1m": {
-        "meta_file": "/data/mllm_datasets/meta_files/cc12m-description-1m.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/cc12m-description-1m.json",
         "image_dir": "/data/mllm_datasets/images/ovis_cc12m",
         "data_format": "conversation"
     },
     "scienceqa-train-val-17k": {
-        "meta_file": "/data/mllm_datasets/meta_files/scienceqa-train-val-17k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/scienceqa-train-val-17k.json",
         "image_dir": "/data/mllm_datasets/images/scienceqa",
         "data_format": "conversation"
     },
     "textvqa-train-35k": {
-        "meta_file": "/data/mllm_datasets/meta_files/textvqa-train-35k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/textvqa-train-35k.json",
         "image_dir": "/data/mllm_datasets/images/textvqa",
         "data_format": "conversation"
     },
     "allava-instruct-laion-4v-485k": {
-        "meta_file": "/data/mllm_datasets/meta_files/allava-instruct-laion-4v-485k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/allava-instruct-laion-4v-485k.json",
         "image_dir": "/data/mllm_datasets/images/allava_laion",
         "data_format": "conversation"
     },
     "allava-instruct-vflan-4v-203k": {
-        "meta_file": "/data/mllm_datasets/meta_files/allava-instruct-vflan-4v-203k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/allava-instruct-vflan-4v-203k.json",
         "image_dir": "/data/mllm_datasets/images/allava_vflan",
         "data_format": "conversation"
     },
     "arxivqa-100k": {
-        "meta_file": "/data/mllm_datasets/meta_files/arxivqa-100k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/arxivqa-100k.json",
         "image_dir": "/data/mllm_datasets/images/arxivqa",
         "data_format": "conversation"
     },
     "q-instruct-198k": {
-        "meta_file": "/data/mllm_datasets/meta_files/q-instruct-198k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/q-instruct-198k.json",
         "image_dir": "/data/mllm_datasets/images/q_instruct",
         "data_format": "conversation"
     },
     "llava-finetune-665k": {
-        "meta_file": "/data/mllm_datasets/meta_files/llava-finetune-665k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/llava-finetune-665k.json",
         "image_dir": "/data/mllm_datasets/images/llava_finetune",
         "data_format": "conversation"
     },
     "geo-177k": {
-        "meta_file": "/data/mllm_datasets/meta_files/geo-177k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/geo-177k.json",
         "image_dir": "/data/mllm_datasets/images/geo",
         "data_format": "conversation"
     },
     "lrv-and-chart-instruction-343k": {
-        "meta_file": "/data/mllm_datasets/meta_files/lrv-and-chart-instruction-343k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/lrv-and-chart-instruction-343k.json",
         "image_dir": "/data/mllm_datasets/images/lrv_and_chart",
         "data_format": "conversation"
     },
     "synthdog-en-ocr-200k": {
-        "meta_file": "/data/mllm_datasets/meta_files/synthdog-en-ocr-200k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/synthdog-en-ocr-200k.json",
         "image_dir": "/data/mllm_datasets/images/synthdog",
         "data_format": "conversation"
     },
     "allava-evol-instruct-143k": {
-        "meta_file": "/data/mllm_datasets/meta_files/allava-evol-instruct-143k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/allava-evol-instruct-143k.json",
         "image_dir": null,
         "data_format": "conversation"
     },
     "cc12m-qa-387k": {
-        "meta_file": "/data/mllm_datasets/meta_files/cc12m-qa-387k.json",
+        "meta_file": "/data/mllm_datasets/meta_files/v1/cc12m-qa-387k.json",
         "image_dir": "/data/mllm_datasets/images/ovis_cc12m",
         "data_format": "conversation"
     }

@@ -13,15 +13,16 @@ from ovis.util.constants import IGNORE_INDEX
 
 
 class MultimodalDataset(Dataset):
-    def __init__(self, name: str, meta_file: str, image_dir: str, model: Ovis, training_args: TrainingArguments):
+    def __init__(self, name: str, info: Dict, model: Ovis, training_args: TrainingArguments):
         self.name = name
-        self.meta_file = meta_file
-        self.image_dir = image_dir
+        self.meta_file = info['meta_file']
+        self.image_dir = info['image_dir']
         self.text_tokenizer = model.get_text_tokenizer()
         self.visual_tokenizer = model.get_visual_tokenizer()
         self.image_height, self.image_width = self.visual_tokenizer.get_image_size()
         self.conversation_formatter = model.get_conversation_formatter()
         self.training_args = training_args
+        self.text_max_length = training_args.text_max_length
         self.samples = self.load()
 
     def load(self):

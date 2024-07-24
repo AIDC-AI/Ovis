@@ -3,8 +3,11 @@ import os
 import pathlib
 
 import deepspeed
+import torch
 import transformers
+from deepspeed import get_accelerator
 from torch.utils.data import ConcatDataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel, AutoConfig
 from transformers import Trainer
 from transformers.integrations.deepspeed import unset_hf_deepspeed_config, set_hf_deepspeed_config
 
@@ -41,10 +44,28 @@ def train():
                       encoding='utf-8') as f:
                 f.write(args_log + '\n')
 
-    # load model
-    if not training_args.ovis_pretrained_path:
-        config = OvisConfig(
-            visual_tokenizer_config=dict(
+    # construct or load ovis model
+    if not training_args.ovis_pretrained_path:  # construct model (S1)
+        # 1. construct ovis config
+        ovis_config = OvisConfig(
+            multimodal_max_length=model_args.multimodal_max_length,
+            conversation_formatter_class=model_args.conversation_formatter_class
+        )
+        # 2. load pretrained llm and text tokenizer
+        llm = AutoModelForCausalLM.from_pretrained(model_args.llm_name_or_path)
+        text_tokenizer = AutoTokenizer.from_pretrained(model_args.llm_name_or_path)
+        if text_tokenizer.pad_token_id is None and model_args.pad_token_id is not None:
+            text_tokenizer.pad_token_id = model_args.pad_token_id
+        # 3. construct visual tokenizer
+        # deepspeed zero.Init with bfloat16 fail for visual_tokenizer, so temporarily disable zero.Init here
+        unset_hf_deepspeed_config()
+        if training_args.visual_tokenizer_pretrained_path is not None:
+            visual_tokenizer = AutoModel.from_pretrained(
+                training_args.visual_tokenizer_pretrained_path,
+                image_processor_name_or_path=training_args.visual_tokenizer_pretrained_path
+            )
+        else:
+            visual_tokenizer_config = AutoConfig.for_model(
                 model_type=model_args.visual_tokenizer_type + "_visual_tokenizer",
                 vocab_size=model_args.visual_vocab_size,
                 tokenize_function=model_args.visual_tokenize_function,
@@ -52,21 +73,18 @@ def train():
                 depths=model_args.visual_depths,
                 use_indicators=model_args.visual_use_indicators,
                 drop_cls_token=model_args.visual_drop_cls_token,
-                hidden_stride=model_args.visual_hidden_stride
-            ) if not training_args.visual_tokenizer_pretrained_path else None,
-            multimodal_max_length=model_args.multimodal_max_length,
-            conversation_formatter_class=model_args.conversation_formatter_class
-        )
-        # deepspeed zero.Init with bfloat16 sometimes fail, so temporarily disable zero.Init here
-        unset_hf_deepspeed_config()
-        model = Ovis(config,
-                     train_from_scratch=True,
-                     llm_name_or_path=model_args.llm_name_or_path,
-                     visual_tokenizer_pretrained_path=training_args.visual_tokenizer_pretrained_path,
-                     pad_token_id=model_args.pad_token_id)
+                hidden_stride=model_args.visual_hidden_stride,
+                hd_booster=model_args.visual_hd_booster
+            )
+            visual_tokenizer = AutoModel.from_config(visual_tokenizer_config, train_from_scratch=True)
+        visual_tokenizer = visual_tokenizer.to(
+            device=torch.device(get_accelerator().device_name(os.getenv("LOCAL_RANK"))))
         if getattr(training_args, 'hf_deepspeed_config', None) is not None:
             set_hf_deepspeed_config(training_args.hf_deepspeed_config)
-    else:
+        # 4. construct ovis model
+        model = Ovis(ovis_config, llm=llm, text_tokenizer=text_tokenizer, visual_tokenizer=visual_tokenizer,
+                     train_from_scratch=True)
+    else:  # load pretrained ovis model (S2, S3)
         model, loading_info = Ovis.from_pretrained(training_args.ovis_pretrained_path,
                                                    multimodal_max_length=model_args.multimodal_max_length,
                                                    output_loading_info=True)
@@ -76,6 +94,7 @@ def train():
         training_args.visual_re_init_layer_begin = None  # re_init a pretrained Ovis is harmful, so disabled
         training_args.vte_re_init = False
 
+    model.get_llm().config.use_cache = False
     model.config.use_cache = False
     text_tokenizer = model.get_text_tokenizer()
 
@@ -112,6 +131,10 @@ def train():
             for name, layer in model.get_visual_tokenizer().get_re_init_layer_dict(
                     training_args.visual_re_init_layer_begin).items():
                 layer.requires_grad_(True)
+        elif module.startswith('visual_tokenizer.backbone.layer.'):
+            layer_index = int(module[len('visual_tokenizer.backbone.layer.'):])
+            layer = model.get_visual_tokenizer().get_backbone_layer(layer_index)
+            layer.requires_grad_(True)
         elif module == 'visual_tokenizer.head':
             model.get_visual_tokenizer().get_head().requires_grad_(True)
         elif module == 'vte':
@@ -128,18 +151,17 @@ def train():
 
     # construct data module
     datasets = []
-    dataset_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dataset_info.json')
+    dataset_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     f'dataset/{training_args.dataset_info}.json')
     with open(dataset_info_path, 'r', encoding='utf-8') as f:
         dataset_info = json.load(f)
     for name in training_args.dataset_names.split('|'):
         info = dataset_info[name]
-        meta_file = info['meta_file']
-        image_dir = info['image_dir']
         data_format = info['data_format']
         if data_format == 'caption':
-            dataset = CaptionDataset(name, meta_file, image_dir, model, training_args)
+            dataset = CaptionDataset(name, info, model, training_args)
         elif data_format == 'conversation':
-            dataset = ConversationDataset(name, meta_file, image_dir, model, training_args)
+            dataset = ConversationDataset(name, info, model, training_args)
         else:
             raise ValueError(f'Invalid data format `{data_format}` for dataset `{name}`')
         datasets.append(dataset)
@@ -182,6 +204,7 @@ def train():
     trainer.save_state()
 
     # save model
+    model.get_llm().config.use_cache = True
     model.config.use_cache = True
     trainer.save_model()
 

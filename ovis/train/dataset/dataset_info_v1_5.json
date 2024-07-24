@@ -1,0 +1,390 @@
+{
+    "pixelprose-14m": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/pixelprose-14m.parquet",
+        "image_dir": "/data/mllm_datasets/images/pixelprose-14m",
+        "data_format": "caption",
+        "caption_template": "<image>\nDescription:\n"
+    },
+    "wikipedia-348k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/wikipedia-348k.parquet",
+        "image_dir": "/data/mllm_datasets/images/wikipedia-348k",
+        "data_format": "caption",
+        "caption_template": "<image>\nEntry:\n"
+    },
+    "ocr-469k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/ocr-469k.parquet",
+        "image_dir": "/data/mllm_datasets/images/ocr-469k",
+        "data_format": "caption",
+        "caption_template": "<image>\nText:\n"
+    },
+    "allava-caption-laion-4v-469k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/allava-caption-laion-4v-469k.json",
+        "image_dir": "/data/mllm_datasets/images/allava",
+        "data_format": "conversation"
+    },
+    "allava-caption-vflan-4v-195k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/allava-caption-vflan-4v-195k.json",
+        "image_dir": "/data/mllm_datasets/images/allava",
+        "data_format": "conversation"
+    },
+    "cc12m-description-387k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/cc12m-description-387k.json",
+        "image_dir": "/data/mllm_datasets/images/ovis_cc12m",
+        "data_format": "conversation"
+    },
+    "mmmath-6k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/mmmath-6k.json",
+        "image_dir": "/data/mllm_datasets/images/mmmath",
+        "data_format": "conversation"
+    },
+    "MathV-360k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/MathV-360k.json",
+        "image_dir": "/data/mllm_datasets/images/MathV-360K",
+        "data_format": "conversation"
+    },
+    "MathQA-395k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/MathQA-395k.json",
+        "image_dir": null,
+        "data_format": "conversation"
+    },
+    "c7s-wizardlm-143k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-wizardlm-143k.json",
+        "image_dir": null,
+        "data_format": "conversation"
+    },
+    "c7s-orca-math-200k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-orca-math-200k.json",
+        "image_dir": null,
+        "data_format": "conversation"
+    },
+    "c7s-mathinstruct-262k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-mathinstruct-262k.json",
+        "image_dir": null,
+        "data_format": "conversation"
+    },
+    "c7s-code-feedback-66k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-code-feedback-66k.json",
+        "image_dir": null,
+        "data_format": "conversation"
+    },
+    "c7s-clevr-700k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-clevr-700k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-tallyqa-250k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-tallyqa-250k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-laion-gpt4v-11k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-laion-gpt4v-11k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-alfworldgpt-45k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-alfworldgpt-45k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-allava-laion-500k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-allava-laion-500k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-allava-vflan-200k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-allava-vflan-200k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-gpt77k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-gpt77k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-idefics375k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-idefics375k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-idk-11k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-idk-11k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-lnqa-302k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-lnqa-302k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-lvis-instruct4v-220k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-lvis-instruct4v-220k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-oodvqa-8k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-oodvqa-8k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-q-instruct-200k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-q-instruct-200k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-qalign-200k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-qalign-200k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-sharegpt4v-mix665k-cap23k-coco-ap9k-lcs3k-sam9k-div2k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-sharegpt4v-mix665k-cap23k-coco-ap9k-lcs3k-sam9k-div2k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-sketchyvqa-8k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-sketchyvqa-8k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-vizwiz-20k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-vizwiz-20k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-geo170k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-geo170k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-ai2d-15k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-ai2d-15k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-arxivqa-100k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-arxivqa-100k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-chartqa-28k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-chartqa-28k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-clean-llava-instruct-150k-llavar-20k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-clean-llava-instruct-150k-llavar-20k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-docvqa-39k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-docvqa-39k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-random-3rd-dvqa-2325k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-random-3rd-dvqa-2325k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-screenqa-79k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-screenqa-79k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-synthdog-500k-modified": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-synthdog-500k-modified.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-filtered-data-engine-161k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-filtered-data-engine-161k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-pathvqa-32k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-pathvqa-32k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "c7s-scienceqa-12k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/c7s-scienceqa-12k.json",
+        "image_dir": "/data/mllm_datasets/images/Cambrian_10M",
+        "data_format": "conversation"
+    },
+    "funsd-1k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/funsd-1k.json",
+        "image_dir": "/data/mllm_datasets/images/funsd",
+        "data_format": "conversation"
+    },
+    "poie-9k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/poie-9k.json",
+        "image_dir": "/data/mllm_datasets/images/poie",
+        "data_format": "conversation"
+    },
+    "sroie-3k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/sroie-3k.json",
+        "image_dir": "/data/mllm_datasets/images/sroie",
+        "data_format": "conversation"
+    },
+    "doclaynet-65k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/doclaynet-65k.json",
+        "image_dir": "/data/mllm_datasets/images/DocLayNet",
+        "data_format": "conversation"
+    },
+    "doclie-real-100k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/doclie-real-100k.json",
+        "image_dir": "/data/mllm_datasets/images/docile",
+        "data_format": "conversation"
+    },
+    "dtvqa-27k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/dtvqa-27k.json",
+        "image_dir": "/data/mllm_datasets/images/DT-VQA",
+        "data_format": "conversation"
+    },
+    "hwl-eng-10k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/hwl-eng-10k.json",
+        "image_dir": "/data/mllm_datasets/images/HWL_OCR_ENG",
+        "data_format": "conversation"
+    },
+    "IAM-7k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/IAM-7k.json",
+        "image_dir": "/data/mllm_datasets/images/IAM-line",
+        "data_format": "conversation"
+    },
+    "orandCAR-5k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/orandCAR-5k.json",
+        "image_dir": "/data/mllm_datasets/images/ORAND-CAR",
+        "data_format": "conversation"
+    },
+    "mmc-base-410k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/mmc-base-410k.json",
+        "image_dir": "/data/mllm_datasets/images/MMC",
+        "data_format": "conversation"
+    },
+    "FigureQA-100k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/FigureQA-100k.json",
+        "image_dir": "/data/mllm_datasets/images/FigureQA",
+        "data_format": "conversation"
+    },
+    "OpenCQA-5k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/OpenCQA-5k.json",
+        "image_dir": "/data/mllm_datasets/images/OpenCQA",
+        "data_format": "conversation"
+    },
+    "PlotQA-157k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/PlotQA-157k.json",
+        "image_dir": "/data/mllm_datasets/images/PlotQA",
+        "data_format": "conversation"
+    },
+    "InfographicVQA-24k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/InfographicVQA-24k.json",
+        "image_dir": "/data/mllm_datasets/images/InfoVQA",
+        "data_format": "conversation"
+    },
+    "hme-74k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/hme-74k.json",
+        "image_dir": "/data/mllm_datasets/images/HME",
+        "data_format": "conversation"
+    },
+    "lrv-instruct-and-chart-343k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/lrv-instruct-and-chart-343k.json",
+        "image_dir": "/data/mllm_datasets/images/LRV",
+        "data_format": "conversation"
+    },
+    "cc12m-qa-387k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/cc12m-qa-387k.json",
+        "image_dir": "/data/mllm_datasets/images/ovis_cc12m",
+        "data_format": "conversation"
+    },
+    "vqa-v2-multi-conversation-184k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/vqa-v2-multi-conversation-184k.json",
+        "image_dir": "/data/mllm_datasets/images/VQA",
+        "data_format": "conversation"
+    },
+    "visualdialog-125k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/visualdialog-125k.json",
+        "image_dir": "/data/mllm_datasets/images/VisualDialog",
+        "data_format": "conversation"
+    },
+    "Super-CLEVR-30k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/Super-CLEVR-30k.json",
+        "image_dir": "/data/mllm_datasets/images/Super-CLEVR",
+        "data_format": "conversation"
+    },
+    "okvqa-14k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/okvqa-14k.json",
+        "image_dir": "/data/mllm_datasets/images/OK-VQA",
+        "data_format": "conversation"
+    },
+    "ViQuAE-2k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/ViQuAE-2k.json",
+        "image_dir": "/data/mllm_datasets/images/ViQuAE",
+        "data_format": "conversation"
+    },
+    "A-OKVQA-18k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/A-OKVQA-18k.json",
+        "image_dir": "/data/mllm_datasets/images/COCO",
+        "data_format": "conversation"
+    },
+    "kvqa-25k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/kvqa-25k.json",
+        "image_dir": "/data/mllm_datasets/images/KVQA",
+        "data_format": "conversation"
+    },
+    "CLEVR-MATH-85k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/CLEVR-MATH-85k.json",
+        "image_dir": "/data/mllm_datasets/images/CLEVR-MATH",
+        "data_format": "conversation"
+    },
+    "Symbolic-Reasoning-TabMW-31k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/Symbolic-Reasoning-TabMW-31k.json",
+        "image_dir": "/data/mllm_datasets/images/Symbolic-Reasoning-TabMWP",
+        "data_format": "conversation"
+    },
+    "Geometry-2k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/Geometry-2k.json",
+        "image_dir": "/data/mllm_datasets/images/Geometry3K",
+        "data_format": "conversation"
+    },
+    "ai2d-mc-15k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/ai2d-mc-15k.json",
+        "image_dir": "/data/mllm_datasets/images/AI2D",
+        "data_format": "conversation"
+    },
+    "tqa-train-34k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/tqa-train-34k.json",
+        "image_dir": "/data/mllm_datasets/images/textvqa",
+        "data_format": "conversation"
+    },
+    "ocr-vqa-multi-conversation-207k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/ocr-vqa-multi-conversation-207k.json",
+        "image_dir": "/data/mllm_datasets/images/ocr-vqa",
+        "data_format": "conversation"
+    },
+    "infovqa-multi-conversation-5k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/infovqa-multi-conversation-5k.json",
+        "image_dir": "/data/mllm_datasets/images/InfoVQA",
+        "data_format": "conversation"
+    },
+    "icqa-train-val-40k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/icqa-train-val-40k.json",
+        "image_dir": "/data/mllm_datasets/images/iconqa",
+        "data_format": "conversation"
+    },
+    "stvqa-78k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/stvqa-78k.json",
+        "image_dir": "/data/mllm_datasets/images/ST-VQA",
+        "data_format": "conversation"
+    },
+    "tqa-train-val-20k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/tqa-train-val-20k.json",
+        "image_dir": "/data/mllm_datasets/images/TQA",
+        "data_format": "conversation"
+    },
+    "vsr-train-dev-12k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/vsr-train-dev-12k.json",
+        "image_dir": "/data/mllm_datasets/images/COCO",
+        "data_format": "conversation"
+    }
+}

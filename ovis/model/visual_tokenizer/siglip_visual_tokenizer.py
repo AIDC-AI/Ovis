@@ -1,52 +1,62 @@
+import logging
 from datetime import datetime
 from typing import Dict
 
 import deepspeed
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoConfig, AutoModel
-from transformers import CLIPVisionModel, CLIPImageProcessor
+from transformers import SiglipVisionModel, SiglipImageProcessor
 from transformers.integrations import is_deepspeed_zero3_enabled
 
 from ovis.util.constants import BEGIN_LINE, END_LINE
 from ovis.util.utils import rank0_print
 from .base_visual_tokenizer import BaseVisualTokenizerConfig, BaseVisualTokenizer
 
-MODEL_TYPE = "clip_visual_tokenizer"
+MODEL_TYPE = "siglip_visual_tokenizer"
 
 
-class ClipVisualTokenizerConfig(BaseVisualTokenizerConfig):
+class SiglipVisualTokenizerConfig(BaseVisualTokenizerConfig):
     model_type = MODEL_TYPE
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if self.drop_cls_token:
+            logging.warning(
+                f'SiglipVisionModel has no cls token, so `drop_cls_token=True` is ignored and reset to `False`')
+            self.drop_cls_token = False
         if self.depths:
             assert len(self.depths) == 1
             self.backbone_kwargs['num_hidden_layers'] = self.depths[0]
 
 
-class ClipVisualTokenizer(BaseVisualTokenizer):
-    config_class = ClipVisualTokenizerConfig
+class SiglipVisualTokenizer(BaseVisualTokenizer):
+    config_class = SiglipVisualTokenizerConfig
     supports_gradient_checkpointing = True
-    _no_split_modules = ["CLIPEncoderLayer"]
-    _image_processor_class = CLIPImageProcessor
-    _image_processor_kwargs = dict(do_center_crop=False)
-    _backbone_class = CLIPVisionModel
-    _backbone_name_or_path = "openai/clip-vit-large-patch14-336"
+    _no_split_modules = ["SiglipVisionTransformer"]
+    _image_processor_class = SiglipImageProcessor
+    _image_processor_kwargs = {}
+    _backbone_class = SiglipVisionModel
+    _backbone_name_or_path = "google/siglip-so400m-patch14-384"
 
-    def __init__(self, config: ClipVisualTokenizerConfig = None, *inputs, **kwargs):
+    def __init__(self, config: SiglipVisualTokenizerConfig = None, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         head_dim = self.config.vocab_size
         if self.config.use_indicators:
             head_dim -= 2  # reserved for two image indicator tokens
         if self.config.hd_booster is None:
             self.head = torch.nn.Sequential(
-                torch.nn.Linear(self.backbone.config.hidden_size, head_dim, bias=False),
+                torch.nn.Linear(
+                    self.backbone.config.hidden_size * self.config.hidden_stride * self.config.hidden_stride, head_dim,
+                    bias=False),
                 torch.nn.LayerNorm(head_dim)
             )
         elif self.config.hd_booster in ['s2wrapper', 's2wrapper-adaptive']:
             self.head = torch.nn.Sequential(
-                torch.nn.Linear(self.backbone.config.hidden_size * 2, head_dim, bias=False),
+                torch.nn.Linear(
+                    self.backbone.config.hidden_size * self.config.hidden_stride * self.config.hidden_stride * 2,
+                    head_dim, bias=False),
                 torch.nn.LayerNorm(head_dim)
             )
         else:
@@ -84,8 +94,8 @@ class ClipVisualTokenizer(BaseVisualTokenizer):
         )
 
     def get_image_size(self):
-        height = self.image_processor.crop_size["height"]
-        width = self.image_processor.crop_size["width"]
+        height = self.image_processor.size["height"]
+        width = self.image_processor.size["width"]
         return height, width
 
     def encode(self, pixel_values):
@@ -126,6 +136,23 @@ class ClipVisualTokenizer(BaseVisualTokenizer):
             features = torch.cat([features_overall, features_pool], dim=-1)  # [n, l, 2*d]
         else:
             raise ValueError(f'Unsupported hd_booster {self.config.hd_booster}')
+
+        # merge number of `hidden_stride * hidden_stride` hidden states together to reduce token sequence length
+        # e.g., for hidden_stride=3, this leads to a token length reduction: 729 -> 81
+        if self.config.hidden_stride > 1:
+            n, l, d = features.shape  # this `d` maybe different from the above `d
+            sqrt_l = int(l ** 0.5)
+            assert sqrt_l ** 2 == l, "The token sequence length should be a perfect square."
+            assert l % (
+                        self.config.hidden_stride ** 2) == 0, "The token sequence length should be divisible by `hidden_stride**2`."
+            features = features.reshape(n, sqrt_l, sqrt_l, d)
+            features = features.reshape(n, sqrt_l // self.config.hidden_stride, self.config.hidden_stride,
+                                        sqrt_l // self.config.hidden_stride, self.config.hidden_stride, d)
+            features = features.permute(0, 1, 3, 2, 4, 5)  # [n, sqrt_l/hs, sqrt_l/hs, hs, hs, d]
+            features = features.flatten(3)  # [n, sqrt_l/hs, sqrt_l/hs, hs*hs*d]
+            features = features.reshape(n, l // (self.config.hidden_stride * self.config.hidden_stride),
+                                        self.config.hidden_stride * self.config.hidden_stride * d)
+
         return features
 
     def forward(self, pixel_values) -> Tensor:  # [BatchSize, ImageShape] -> [BatchSize, #Token, VocabSize]
@@ -161,5 +188,5 @@ class ClipVisualTokenizer(BaseVisualTokenizer):
         return tokens
 
 
-AutoConfig.register(MODEL_TYPE, ClipVisualTokenizerConfig)
-AutoModel.register(ClipVisualTokenizerConfig, ClipVisualTokenizer)
+AutoConfig.register(MODEL_TYPE, SiglipVisualTokenizerConfig)
+AutoModel.register(SiglipVisualTokenizerConfig, SiglipVisualTokenizer)

@@ -6,6 +6,7 @@ EXPNAME="${0##*/}"; EXPNAME="${EXPNAME%.sh}"
 deepspeed ovis/train/train.py \
         --deepspeed scripts/zero2.json \
         --stage 1 \
+        --dataset_info dataset_info_v1 \
         --dataset_names coyo-10m \
         --caption_template "<image>'s caption: " \
         --llm_name_or_path meta-llama/Meta-Llama-3-8B-Instruct \

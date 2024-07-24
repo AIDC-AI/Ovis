@@ -15,6 +15,7 @@ class ModelArguments:
     visual_tau: float = field(default=1.0)
     visual_depths: Optional[str] = field(default=None)
     visual_hidden_stride: int = field(default=1)
+    visual_hd_booster: Optional[str] = field(default=None)
     multimodal_max_length: int = field(default=2048)
     conversation_formatter_class: str = field(default=None)
     pad_token_id: Optional[int] = field(default=None)
@@ -23,6 +24,7 @@ class ModelArguments:
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
     dataset_names: Optional[str] = field(default=None)  # a|b|c
+    dataset_info: Optional[str] = field(default='dataset_info_v1_5')
     ovis_pretrained_path: Optional[str] = field(default=None)
     visual_tokenizer_pretrained_path: Optional[str] = field(default=None)
     caption_template: Optional[str] = field(default=None)
@@ -36,6 +38,7 @@ class TrainingArguments(transformers.TrainingArguments):
     monitor_step: int = field(default=100)
     visual_re_init_layer_begin: Optional[int] = field(default=None)
     vte_re_init: bool = field(default=False)
+    text_max_length: int = field(default=1024)
 
     def __post_init__(self):
         if self.gradient_checkpointing:

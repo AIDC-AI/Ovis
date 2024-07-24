@@ -1,4 +1,5 @@
 from dataclasses import field, dataclass
+from typing import Optional, Union, List
 
 import torch
 from PIL import Image
@@ -10,63 +11,95 @@ from ovis.util.constants import IMAGE_TOKEN
 @dataclass
 class RunnerArguments:
     model_path: str
-    do_sample: bool = field(default=False)
-    temperature: float = field(default=1.0)
-    top_p: float = field(default=None)
-    num_beams: int = field(default=1)
     max_new_tokens: int = field(default=512)
+    do_sample: bool = field(default=False)
+    top_p: Optional[float] = field(default=None)
+    top_k: Optional[int] = field(default=None)
+    temperature: Optional[float] = field(default=None)
 
 
 class OvisRunner:
     def __init__(self, args: RunnerArguments):
-        self.args = args
-        self.model = Ovis.from_pretrained(self.args.model_path,
-                                          torch_dtype=torch.bfloat16,
-                                          multimodal_max_length=8192).cuda()
+        self.model_path = args.model_path
+        self.dtype = torch.bfloat16
+        self.device = torch.cuda.current_device()
+        self.dtype = torch.bfloat16
+        self.model = Ovis.from_pretrained(self.model_path, torch_dtype=self.dtype, multimodal_max_length=8192)
+        self.model = self.model.eval().to(device=self.device)
+        self.eos_token_id = self.model.generation_config.eos_token_id
         self.text_tokenizer = self.model.get_text_tokenizer()
+        self.pad_token_id = self.text_tokenizer.pad_token_id
         self.visual_tokenizer = self.model.get_visual_tokenizer()
         self.conversation_formatter = self.model.get_conversation_formatter()
+        self.image_placeholder = IMAGE_TOKEN
+        self.gen_kwargs = dict(
+            max_new_tokens=args.max_new_tokens,
+            do_sample=args.do_sample,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            temperature=args.temperature,
+            repetition_penalty=None,
+            eos_token_id=self.eos_token_id,
+            pad_token_id=self.pad_token_id,
+            use_cache=True
+        )
 
-    def process_input(self, image, text):
-        query = f'{IMAGE_TOKEN} {text}'
+    def preprocess(self, inputs: List[Union[Image.Image, str]]):
+        # for single image and single text inputs, ensure image ahead
+        if len(inputs) == 2 and isinstance(inputs[0], str) and isinstance(inputs[1], Image.Image):
+            inputs = reversed(inputs)
+
+        # build query
+        query = ''
+        images = []
+        for data in inputs:
+            if isinstance(data, Image.Image):
+                query += self.image_placeholder + '\n'
+                images.append(data)
+            elif isinstance(data, str):
+                query += data.replace(self.image_placeholder, '')
+            else:
+                raise RuntimeError(f'Invalid input type, expected `PIL.Image.Image` or `str`, but got {type(data)}')
+
+        # format conversation
         prompt, input_ids = self.conversation_formatter.format_query(query)
-        input_ids = torch.unsqueeze(input_ids, dim=0)
         attention_mask = torch.ne(input_ids, self.text_tokenizer.pad_token_id)
-        pixel_values = self.visual_tokenizer.preprocess_image(image)
+        input_ids = input_ids.unsqueeze(0).to(device=self.device)
+        attention_mask = attention_mask.unsqueeze(0).to(device=self.device)
 
-        return prompt, pixel_values, input_ids, attention_mask
+        # preprocess images
+        if len(images) == 0:
+            pixel_values = [None]
+        else:
+            preprocessed_images = [self.visual_tokenizer.preprocess_image(image) for image in images]
+            pixel_values = [torch.cat(preprocessed_images, dim=0).to(device=self.device, dtype=self.dtype)]
 
-    def run(self, image: Image.Image, text: str, **gen_args):
-        prompt, pixel_values, input_ids, attention_mask = self.process_input(image, text)
-        input_ids = input_ids.to(device=self.model.device)
-        attention_mask = attention_mask.to(device=self.model.device)
-        pixel_values = [pixel_values.to(dtype=self.visual_tokenizer.dtype,
-                                        device=self.visual_tokenizer.device)]
-        with torch.inference_mode():
-            kwargs = dict(
-                pixel_values=pixel_values,
-                attention_mask=attention_mask,
-                do_sample=self.args.do_sample,
-                num_beams=self.args.num_beams,
-                max_new_tokens=self.args.max_new_tokens,
-                repetition_penalty=None,
-                use_cache=True,
-                eos_token_id=self.text_tokenizer.eos_token_id,
-                pad_token_id=self.text_tokenizer.pad_token_id
-            )
-            if self.args.do_sample:
-                kwargs["temperature"] = self.args.temperature,
-                kwargs["top_p"] = self.args.top_p
-            output_ids = self.model.generate(input_ids, **kwargs)[0]
+        return prompt, input_ids, attention_mask, pixel_values
+
+    def run(self, inputs: List[Union[Image.Image, str]]):
+        prompt, input_ids, attention_mask, pixel_values = self.preprocess(inputs)
+        output_ids = self.model.generate(
+            input_ids,
+            pixel_values=pixel_values,
+            attention_mask=attention_mask,
+            **self.gen_kwargs
+        )
+        output = self.text_tokenizer.decode(output_ids[0], skip_special_tokens=True)
         input_token_len = input_ids.shape[1]
-        output_token_len = output_ids.shape[0]
-        n_diff_input_output = (input_ids[0] != output_ids[:input_token_len]).sum().item()
-        assert n_diff_input_output == 0, f"{n_diff_input_output} output_ids is not the same as the input_ids"
-        output = self.text_tokenizer.decode(output_ids[input_token_len:], skip_special_tokens=True)
+        output_token_len = output_ids.shape[1]
         response = dict(
             prompt=prompt,
             output=output,
             prompt_tokens=input_token_len,
-            total_tokens=output_token_len
+            total_tokens=input_token_len + output_token_len
         )
         return response
+
+
+if __name__ == '__main__':
+    runner_args = RunnerArguments(model_path='<model_path>')
+    runner = OvisRunner(runner_args)
+    image = Image.open('<image_path>')
+    text = '<prompt>'
+    response = runner.run([image, text])
+    print(response['output'])
