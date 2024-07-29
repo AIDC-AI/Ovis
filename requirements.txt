@@ -1,6 +1,6 @@
 torch==2.1.0
 torchvision==0.16.0
-transformers==4.42.4
+transformers==4.43.2
 tokenizers==0.19.1
 sentencepiece==0.1.99
 pyarrow==14.0.2

@@ -22,7 +22,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 - [License](#license)
 
 ## Install
-Ovis has been tested with Python 3.10, Torch 2.1.0, Transformers 4.42.4, and DeepSpeed 0.14.0. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before training or inference, please install Ovis as follows.
+Ovis has been tested with Python 3.10, Torch 2.1.0, Transformers 4.43.2, and DeepSpeed 0.14.0. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before training or inference, please install Ovis as follows.
 ```bash
 git clone git@github.com:AIDC-AI/Ovis.git
 conda create -n ovis python=3.10 -y
