@@ -52,7 +52,10 @@ def train():
             conversation_formatter_class=model_args.conversation_formatter_class
         )
         # 2. load pretrained llm and text tokenizer
-        llm = AutoModelForCausalLM.from_pretrained(model_args.llm_name_or_path)
+        attn_kwargs = dict()
+        if training_args.train_attn_implementation is not None:
+            attn_kwargs['attn_implementation'] = training_args.train_attn_implementation
+        llm = AutoModelForCausalLM.from_pretrained(model_args.llm_name_or_path, **attn_kwargs)
         text_tokenizer = AutoTokenizer.from_pretrained(model_args.llm_name_or_path)
         if text_tokenizer.pad_token_id is None and model_args.pad_token_id is not None:
             text_tokenizer.pad_token_id = model_args.pad_token_id
@@ -87,6 +90,7 @@ def train():
     else:  # load pretrained ovis model (S2, S3)
         model, loading_info = Ovis.from_pretrained(training_args.ovis_pretrained_path,
                                                    multimodal_max_length=model_args.multimodal_max_length,
+                                                   train_attn_implementation=training_args.train_attn_implementation,
                                                    output_loading_info=True)
         rank0_print(BEGIN_LINE)
         rank0_print(f'Loading info of Ovis:\n{loading_info}')

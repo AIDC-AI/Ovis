@@ -8,6 +8,7 @@ import torch
 from torch import Tensor, LongTensor, IntTensor
 from torch.nn import init
 from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM
+from transformers.cache_utils import HybridCache
 from transformers.generation.utils import GenerateOutput
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled, deepspeed_config
 
@@ -46,7 +47,10 @@ class Ovis(OvisPreTrainedModel):
             self.visual_tokenizer = kwargs['visual_tokenizer']
             self.config.visual_tokenizer_config = self.visual_tokenizer.config
         else:
-            self.llm = AutoModelForCausalLM.from_config(self.config.llm_config)
+            attn_kwargs = dict()
+            if kwargs.get('train_attn_implementation', None) is not None:
+                attn_kwargs['attn_implementation'] = kwargs.pop('train_attn_implementation')
+            self.llm = AutoModelForCausalLM.from_config(self.config.llm_config, **attn_kwargs)
             assert self.config.hidden_size == self.llm.config.hidden_size, "hidden size mismatch"
             self.text_tokenizer = AutoTokenizer.from_pretrained(self.config.name_or_path)
             self.visual_tokenizer = AutoModel.from_config(self.config.visual_tokenizer_config,
@@ -269,6 +273,33 @@ class Ovis(OvisPreTrainedModel):
         #                                             safe_serialization=safe_serialization)
         # self.get_visual_tokenizer().get_image_processor().save_pretrained(visual_tokenizer_directory)
 
+    def _get_hybrid_cache_for_llm(self, max_batch_size: int, max_cache_len: int):
+        cache_cls = HybridCache
+        llm = self.get_llm()
+
+        need_new_cache = (
+            not hasattr(llm, "_cache")
+            or (not isinstance(llm._cache, cache_cls))
+            or llm._cache.max_batch_size != max_batch_size
+            or llm._cache.max_cache_len < max_cache_len
+        )
+
+        if need_new_cache:
+            if hasattr(llm.config, "_pre_quantization_dtype"):
+                cache_dtype = llm.config._pre_quantization_dtype
+            else:
+                cache_dtype = llm.dtype
+            llm._cache = cache_cls(
+                config=llm.config,
+                max_batch_size=max_batch_size,
+                max_cache_len=max_cache_len,
+                device=llm.device,
+                dtype=cache_dtype,
+            )
+        else:
+            llm._cache.reset()
+        return llm._cache
+
     # TODO: support batch generation
     def generate(
         self,
@@ -283,7 +314,8 @@ class Ovis(OvisPreTrainedModel):
             pixel_values=kwargs.pop('pixel_values')
         )
         if getattr(self.generation_config, 'cache_implementation') == 'hybrid':  # mainly for Gemma2
-            kwargs['past_key_values'] = self.get_llm()._get_cache('hybrid', getattr(kwargs, "num_beams", 1), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
+            kwargs['past_key_values'] = self._get_hybrid_cache_for_llm(
+                getattr(kwargs, "num_beams", 1), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
             self.get_llm()._supports_cache_class = True
             kwargs['cache_implementation'] = None
 

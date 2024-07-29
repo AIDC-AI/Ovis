@@ -34,11 +34,12 @@ class TrainingArguments(transformers.TrainingArguments):
     optim: str = field(default="adamw_torch")
     visual_max_tau: float = field(default=5.0)
     visual_min_tau: float = field(default=0.05)
-    save_safetensors: bool = field(default=False)
+    save_safetensors: bool = field(default=True)
     monitor_step: int = field(default=100)
     visual_re_init_layer_begin: Optional[int] = field(default=None)
     vte_re_init: bool = field(default=False)
     text_max_length: int = field(default=1024)
+    train_attn_implementation: Optional[str] = field(default=None)
 
     def __post_init__(self):
         if self.gradient_checkpointing:
