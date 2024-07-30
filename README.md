@@ -41,7 +41,7 @@ Ovis can be instantiated with popular LLMs (e.g., Llama3, Gemma2). We provide th
 | Ovis1.5-Gemma2-9B        | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.5-Gemma2-9B)  |
 
 ## Performance
-We evaluate Ovis across various multimodal benchmarks using [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) and compare its performance to leading MLLMs with similar parameter scales.
+We evaluate Ovis1.5 across various multimodal benchmarks using [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) and compare its performance to leading MLLMs with similar parameter scales.
 
 |                   | MiniCPM-Llama3-V2.5 | GLM-4V-9B | Ovis1.5-Llama3-8B | Ovis1.5-Gemma2-9B |
 |:------------------|--------------------:|----------:|------------------:|------------------:|
