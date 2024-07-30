@@ -42,6 +42,11 @@
         "image_dir": "/data/mllm_datasets/images/MathV-360K",
         "data_format": "conversation"
     },
+    "MathV-CoT-360k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/MathV-CoT-360k.json",
+        "image_dir": "/data/mllm_datasets/images/MathV-360K",
+        "data_format": "conversation"
+    },
     "MathQA-395k": {
         "meta_file": "/data/mllm_datasets/meta_files/v1_5/MathQA-395k.json",
         "image_dir": null,
@@ -234,7 +239,12 @@
     },
     "doclie-real-100k": {
         "meta_file": "/data/mllm_datasets/meta_files/v1_5/doclie-real-100k.json",
-        "image_dir": "/data/mllm_datasets/images/docile",
+        "image_dir": "/data/mllm_datasets/images/ovis-docile",
+        "data_format": "conversation"
+    },
+    "docmatix-si-900k": {
+        "meta_file": "/data/mllm_datasets/meta_files/v1_5/docmatix-si-900k.json",
+        "image_dir": "/data/mllm_datasets/images/docmatix",
         "data_format": "conversation"
     },
     "dtvqa-27k": {

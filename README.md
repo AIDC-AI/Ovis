@@ -35,28 +35,29 @@ pip install -e .
 ## Model
 Ovis can be instantiated with popular LLMs (e.g., Llama3, Gemma2). We provide the following pretrained Ovis MLLMs:
 
-| Ovis MLLMs               | ViT         | LLM                |                          Model Weights                          | 
-|:-------------------------|:------------|:-------------------|:---------------------------------------------------------------:|
-| Ovis1.5-Llama3-8B        | Siglip-400M | Llama3-8B-Instruct | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.5-Llama3-8B) |
+| Ovis MLLMs               | ViT         | LLM                |                          Model Weights                           |
+|:-------------------------|:-----------:|:------------------:|:----------------------------------------------------------------:|
+| Ovis1.5-Llama3-8B        | Siglip-400M | Llama3-8B-Instruct | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.5-Llama3-8B)  |
+| Ovis1.5-Gemma2-9B        | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.5-Gemma2-9B)  |
 
 ## Performance
 We evaluate Ovis across various multimodal benchmarks using [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) and compare its performance to leading MLLMs with similar parameter scales.
 
-|                   | MiniCPM-Llama3-V2.5 |                                                 Ovis1.5-Llama3-8B |
-|:------------------|--------------------:|------------------------------------------------------------------:|
-| ViT               |         Siglip-400M |                                                       Siglip-400M |
-| LLM               |  Llama3-8B-Instruct |                                                Llama3-8B-Instruct |
-| MMTBench-VAL      |                57.6 |                                                          **60.7** |
-| MMBench-EN-V1.1   |                  74 |                                                          **78.2** |
-| MMBench-CN-V1.1   |                70.1 |                                                          **75.2** |
-| MMStar            |                51.8 |                                                          **57.2** |
-| MMMU-Val          |                45.8 |                                                          **48.6** |
-| MathVista-Mini    |                54.3 |                                                          **62.4** |
-| HallusionBenchAvg |                42.4 |                                                          **44.5** |
-| AI2D              |                78.4 |                                                          **82.5** |
-| OCRBench          |                 725 |                                                           **743** |
-| MMVet             |            **52.8** |                                                              52.2 |
-| RealWorldQA       |                63.5 |                                                          **64.6** |
+|                   | MiniCPM-Llama3-V2.5 | GLM-4V-9B | Ovis1.5-Llama3-8B | Ovis1.5-Gemma2-9B |
+|:------------------|--------------------:|----------:|------------------:|------------------:|
+| Open Weights      |                  ✅ |         ✅ |                ✅ |                ✅ |
+| Open Datasets     |                  ❌ |         ❌ |                ✅ |                ✅ |
+| MMTBench-VAL      |                57.6 |      48.8 |              60.7 |          **62.7** |
+| MMBench-EN-V1.1   |                  74 |      68.7 |          **78.2** |              78.0 |
+| MMBench-CN-V1.1   |                70.1 |      67.1 |          **75.2** |              75.1 |
+| MMStar            |                51.8 |      54.8 |              57.2 |          **58.7** |
+| MMMU-Val          |                45.8 |      46.9 |              48.6 |          **49.8** |
+| MathVista-Mini    |                54.3 |      51.1 |              62.4 |          **65.7** |
+| HallusionBenchAvg |                42.4 |        45 |              44.5 |          **48.0** |
+| AI2D              |                78.4 |      71.2 |              82.5 |          **84.7** |
+| OCRBench          |                 725 |   **776** |               743 |               756 |
+| MMVet             |                52.8 |    **58** |              52.2 |              56.5 |
+| RealWorldQA       |                63.5 |        66 |              64.6 |          **66.9** |
 
 
 ## Dataset
@@ -83,6 +84,7 @@ We provide the `meta_file` for each training dataset at [Huggingface](https://hu
 | InfographicVQA-24k / infovqa-multi-conversation-5k |                   InfoVQA |                       https://rrc.cvc.uab.es/?ch=17&com=downloads |
 | MathQA-395k                                        |                         - |                                                                 - |
 | MathV-360k                                         |                MathV-360K |             https://huggingface.co/datasets/Zhiqiang007/MathV360K |
+| MathV-CoT-360k                                     |                MathV-360K |             https://huggingface.co/datasets/Zhiqiang007/MathV360K |
 | OpenCQA-5k                                         |                   OpenCQA |                                https://github.com/vis-nlp/OpenCQA |
 | PlotQA-157k                                        |                    PlotQA |                           https://github.com/NiteshMethani/PlotQA |
 | Super-CLEVR-30k                                    |               Super-CLEVR |                             https://github.com/Lizw14/Super-CLEVR |
@@ -91,7 +93,8 @@ We provide the `meta_file` for each training dataset at [Huggingface](https://hu
 | ai2d-mc-15k                                        |                      AI2D |                                 https://allenai.org/data/diagrams |
 | c7s-*                                              |              Cambrian_10M |          https://huggingface.co/datasets/nyu-visionx/Cambrian-10M |
 | doclaynet-65k                                      |                 DocLayNet |                   https://huggingface.co/datasets/ds4sd/DocLayNet |
-| doclie-real-100k                                   |                    docile |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| doclie-real-100k                                   |               ovis-docile |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| docmatix-si-900k                                   |                  docmatix |            https://huggingface.co/datasets/HuggingFaceM4/Docmatix |
 | dtvqa-27k                                          |                    DT-VQA |                           https://github.com/ShuoZhang2003/DT-VQA |
 | funsd-1k                                           |                     funsd |                            https://guillaumejaume.github.io/FUNSD |
 | hme-74k                                            |                       HME |                                https://github.com/Phymond/HME100K |
@@ -132,7 +135,7 @@ Below is an example of the folder structure consistent with `dataset_info_v1_5.j
 ```
 
 ## Train
-Ovis is trained in three stages, with each stage's training scripts located in the `scripts` directory. Before starting the training, ensure you properly set the `ROOT` variable in the scripts. Below are the commands to train Ovis-Clip-Qwen1.5-7B:
+Ovis is trained in three stages, with each stage's training scripts located in the `scripts` directory. Before starting the training, ensure you properly set the `ROOT` variable in the scripts. Below are the commands to train Ovis1.5-Llama3-8B:
 ```bash
 bash scripts/v1_5/Ovis1.5-Llama3-8B-S1.sh
 bash scripts/v1_5/Ovis1.5-Llama3-8B-S2.sh
@@ -172,4 +175,4 @@ This work is a collaborative effort by the MarcoVL team. We would also like to p
 - [Wings: Learning Multimodal LLMs without Text-only Forgetting](https://arxiv.org/abs/2406.03496)
 
 ## License
-The project is licensed under the Apache 2.0 License and is restricted to uses that comply with the license agreements of Qwen, Llama3, and Clip.
+The project is licensed under the Apache 2.0 License and is restricted to uses that comply with the license agreements of Qwen, Llama3, Clip, and Siglip.

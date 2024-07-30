@@ -254,7 +254,7 @@ class Ovis(OvisPreTrainedModel):
         variant: Optional[str] = None,
         token: Optional[Union[str, bool]] = None,
         save_peft_format: bool = True,
-        **kwargs,
+        **kwargs
     ):
         super().save_pretrained(save_directory,
                                 is_main_process=is_main_process,
@@ -304,7 +304,7 @@ class Ovis(OvisPreTrainedModel):
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
-        **kwargs,
+        **kwargs
     ) -> Union[GenerateOutput, torch.LongTensor]:
         assert inputs.shape[0] == 1, 'Currently, only support `batch_size=1`'
         _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
