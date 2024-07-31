@@ -73,7 +73,7 @@ We provide the `meta_file` for each training dataset at [Huggingface](https://hu
 |:---------------------------------------------------|--------------------------:|------------------------------------------------------------------:|
 | pixelprose-14m                                     |            pixelprose-14m |            `image_url` of each sample in `pixelprose-14m.parquet` |
 | wikipedia-348k                                     |            wikipedia-348k |            `image_url` of each sample in `wikipedia-348k.parquet` |
-| ocr-469k                                           |                  ocr-469k |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
+| ocr-469k                                           |                  ocr-469k |                  `image_url` of each sample in `ocr-469k.parquet` |
 | allava-*                                           |                    allava |     https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V |
 | cc12m-description-387k / cc12m-qa-387k             |                ovis_cc12m |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
 | A-OKVQA-18k / vsr-train-dev-12k                    |                      COCO |                                           https://cocodataset.org |
