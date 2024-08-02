@@ -58,6 +58,8 @@ We evaluate Ovis1.5 across various multimodal benchmarks using [VLMEvalKit](http
 | OCRBench          |                 725 |   **776** |               743 |               756 |
 | MMVet             |                52.8 |    **58** |              52.2 |              56.5 |
 | RealWorldQA       |                63.5 |        66 |              64.6 |          **66.9** |
+| CharXiv Reasoning |                24.9 |         - |              28.2 |          **28.4** |
+| CharXiv Descriptive |              59.3 |         - |              60.2 |          **62.6** |
 
 
 ## Dataset
