@@ -177,4 +177,4 @@ This work is a collaborative effort by the MarcoVL team. We would also like to p
 - [Wings: Learning Multimodal LLMs without Text-only Forgetting](https://arxiv.org/abs/2406.03496)
 
 ## License
-The project is licensed under the Apache 2.0 License and is restricted to uses that comply with the license agreements of Qwen, Llama3, Clip, and Siglip.
+The project is licensed under the Apache 2.0 License and is restricted to uses that comply with the license agreements of Qwen, Llama3, Gemma2, Clip, and Siglip.
