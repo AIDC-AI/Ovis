@@ -7,6 +7,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 </div>
 
 ## Release
+- [08/07] 🔥 Demos launched on Huggingface: [Ovis1.5-Llama3-8B](https://huggingface.co/spaces/AIDC-AI/Ovis1.5-Llama3-8B) and [Ovis1.5-Gemma2-9B](https://huggingface.co/spaces/AIDC-AI/Ovis1.5-Gemma2-9B)
 - [07/24] 🔥 Announcing Ovis1.5, the latest version of Ovis! As always, Ovis1.5 remains fully open-source: we release the [training datasets](https://huggingface.co/datasets/AIDC-AI/Ovis-dataset), [training & inference codes](https://github.com/AIDC-AI/Ovis), and [model weights](https://huggingface.co/AIDC-AI/Ovis1.5-Llama3-8B) for reproducible transparency and community collaboration.
 - [06/14] 🔥 We release the [paper](https://arxiv.org/pdf/2405.20797), [code](https://github.com/AIDC-AI/Ovis), [models](https://huggingface.co/AIDC-AI/Ovis-Clip-Llama3-8B), and [datasets](https://huggingface.co/datasets/AIDC-AI/Ovis-dataset).
 
