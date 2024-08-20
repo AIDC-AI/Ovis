@@ -93,7 +93,7 @@ We provide the `meta_file` for each training dataset at [Huggingface](https://hu
 | Super-CLEVR-30k                                    |               Super-CLEVR |                             https://github.com/Lizw14/Super-CLEVR |
 | Symbolic-Reasoning-TabMW-31k                       | Symbolic-Reasoning-TabMWP |                                        https://promptpg.github.io |
 | ViQuAE-2k                                          |                    ViQuAE |                              https://github.com/PaulLerner/ViQuAE |
-| ai2d-mc-15k                                        |                      AI2D |                                 https://allenai.org/data/diagrams |
+| ai2d-mc-15k                                        |                      AI2D |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
 | c7s-*                                              |              Cambrian_10M |          https://huggingface.co/datasets/nyu-visionx/Cambrian-10M |
 | doclaynet-65k                                      |                 DocLayNet |                   https://huggingface.co/datasets/ds4sd/DocLayNet |
 | doclie-real-100k                                   |               ovis-docile |              https://huggingface.co/datasets/AIDC-AI/Ovis-dataset |
