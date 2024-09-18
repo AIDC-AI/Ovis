@@ -6,13 +6,17 @@ from transformers import PretrainedConfig, AutoConfig
 class OvisConfig(PretrainedConfig):
     model_type = "ovis"
 
-    def __init__(self,
-                 llm_config: Optional[Union[PretrainedConfig, dict]] = None,
-                 visual_tokenizer_config: Optional[Union[PretrainedConfig, dict]] = None,
-                 multimodal_max_length=2048,
-                 hidden_size=None,
-                 conversation_formatter_class=None,
-                 **kwargs):
+    def __init__(
+        self,
+        llm_config: Optional[Union[PretrainedConfig, dict]] = None,
+        visual_tokenizer_config: Optional[Union[PretrainedConfig, dict]] = None,
+        multimodal_max_length=8192,
+        hidden_size=None,
+        conversation_formatter_class=None,
+        llm_attn_implementation=None,
+        disable_tie_weight=False,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         if llm_config is not None:
             assert isinstance(llm_config, (PretrainedConfig, dict)), \
@@ -33,3 +37,5 @@ class OvisConfig(PretrainedConfig):
         self.multimodal_max_length = multimodal_max_length
         self.hidden_size = hidden_size
         self.conversation_formatter_class = conversation_formatter_class
+        self.llm_attn_implementation = llm_attn_implementation
+        self.disable_tie_weight = disable_tie_weight

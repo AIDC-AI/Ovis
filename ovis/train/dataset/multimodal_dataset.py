@@ -1,5 +1,5 @@
 import logging
-import os.path
+import os
 from typing import Dict, Sequence, Union, List
 
 import torch
@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizer
 
 from ovis.model.modeling_ovis import Ovis
 from ovis.train.arguments import TrainingArguments
-from ovis.util.constants import IGNORE_INDEX
+from ovis.util.constants import IGNORE_ID
 
 
 class MultimodalDataset(Dataset):
@@ -17,12 +17,13 @@ class MultimodalDataset(Dataset):
         self.name = name
         self.meta_file = info['meta_file']
         self.image_dir = info['image_dir']
+        self.caption_template = info.get('caption_template', None)
         self.text_tokenizer = model.get_text_tokenizer()
         self.visual_tokenizer = model.get_visual_tokenizer()
         self.image_height, self.image_width = self.visual_tokenizer.get_image_size()
-        self.conversation_formatter = model.get_conversation_formatter()
-        self.training_args = training_args
+        self.model = model
         self.text_max_length = training_args.text_max_length
+        self.max_partitions = [int(m.strip()) for m in training_args.max_partitions.split('|')]
         self.samples = self.load()
 
     def load(self):
@@ -58,8 +59,8 @@ class DataCollatorForMultimodalDataset:
         labels = torch.nn.utils.rnn.pad_sequence(
             labels,
             batch_first=True,
-            padding_value=IGNORE_INDEX)
-        num_valid_label = torch.not_equal(labels, IGNORE_INDEX).sum().item()
+            padding_value=IGNORE_ID)
+        num_valid_label = torch.not_equal(labels, IGNORE_ID).sum().item()
         if num_valid_label == 0:
             logging.warning(
                 f'[DataCollatorForMultimodalDataset] All labels in a batch are ignored, which may lead to training instability\n{input_ids=}\n{attention_mask=}\n{labels=}')

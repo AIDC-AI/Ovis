@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict
 
-import torch
-
-from ovis.util.constants import IMAGE_TOKEN_INDEX, IGNORE_INDEX, IMAGE_TOKEN
+from ovis.util.constants import IMAGE_TOKEN_ID, IGNORE_ID, IMAGE_TOKEN
 
 
 class ConversationFormatter(ABC):
@@ -14,19 +12,19 @@ class ConversationFormatter(ABC):
         assert tokenizer_type in self.support_tokenizer_types, \
             f'Invalid tokenizer type, expected one from `{self.support_tokenizer_types}`, but got `{tokenizer_type}`'
         self.tokenizer = tokenizer
-        self.image_symbol = IMAGE_TOKEN
-        self.image_token_index = IMAGE_TOKEN_INDEX
-        self.ignore_index = IGNORE_INDEX
+        self.image_token = IMAGE_TOKEN
+        self.image_token_id = IMAGE_TOKEN_ID
+        self.ignore_id = IGNORE_ID
 
     def _tokenize_with_image_symbol(self, text):
         text_chunks = [self.tokenizer(chunk, add_special_tokens=False).input_ids for chunk in
-                       text.split(self.image_symbol)]
+                       text.split(self.image_token)]
         token_ids = []
         num_chuck = len(text_chunks)
         for i, chunk in enumerate(text_chunks):
             token_ids.extend(chunk)
             if i < num_chuck - 1:
-                token_ids.append(self.image_token_index)
+                token_ids.append(self.image_token_id)
         return token_ids
 
     @abstractmethod
@@ -82,7 +80,7 @@ class QwenConversationFormatter(ConversationFormatter):
             prompt += text
             token_ids = self._tokenize_with_image_symbol(text)
             input_ids.extend(token_ids)
-            label_ids = [self.ignore_index] * len(token_ids)
+            label_ids = [self.ignore_id] * len(token_ids)
             if frm == "gpt" and generation_preface is None:
                 # learning `\n` following `im_end` is meaningless, so the last `\n` token is ignored in label
                 label_ids[self.gpt_token_num:-1] = token_ids[self.gpt_token_num:-1]
@@ -90,8 +88,6 @@ class QwenConversationFormatter(ConversationFormatter):
 
         assert self._tokenize_with_image_symbol(prompt) == input_ids
         assert len(input_ids) == len(labels)
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-        labels = torch.tensor(labels, dtype=torch.long)
 
         return prompt, input_ids, labels
 
@@ -141,7 +137,7 @@ class Llama3ConversationFormatter(ConversationFormatter):
 
         prompt = "" + self.bos_token
         input_ids = [] + self.bos_token_ids
-        labels = [] + [IGNORE_INDEX] * len(input_ids)
+        labels = [] + [IGNORE_ID] * len(input_ids)
         num_conversation = len(conversations)
         for i, conversation in enumerate(conversations):
             frm = conversation["from"]
@@ -153,15 +149,13 @@ class Llama3ConversationFormatter(ConversationFormatter):
             prompt += text
             token_ids = self._tokenize_with_image_symbol(text)
             input_ids.extend(token_ids)
-            label_ids = [self.ignore_index] * len(token_ids)
+            label_ids = [self.ignore_id] * len(token_ids)
             if frm == "gpt":
                 label_ids[self.gpt_token_num:] = token_ids[self.gpt_token_num:]
             labels.extend(label_ids)
 
         assert self._tokenize_with_image_symbol(prompt) == input_ids
         assert len(input_ids) == len(labels)
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-        labels = torch.tensor(labels, dtype=torch.long)
 
         return prompt, input_ids, labels
 
@@ -207,7 +201,7 @@ class GemmaConversationFormatter(ConversationFormatter):
 
         prompt = "" + self.bos_token
         input_ids = [] + self.bos_token_ids
-        labels = [] + [IGNORE_INDEX] * len(input_ids)
+        labels = [] + [IGNORE_ID] * len(input_ids)
         num_conversation = len(conversations)
         for i, conversation in enumerate(conversations):
             frm = conversation["from"]
@@ -219,7 +213,7 @@ class GemmaConversationFormatter(ConversationFormatter):
             prompt += text
             token_ids = self._tokenize_with_image_symbol(text)
             input_ids.extend(token_ids)
-            label_ids = [self.ignore_index] * len(token_ids)
+            label_ids = [self.ignore_id] * len(token_ids)
             if frm == "gpt":
                 # learning `\n` following `im_end` is meaningless, so the last `\n` token is ignored in label
                 label_ids[self.gpt_token_num:-1] = token_ids[self.gpt_token_num:-1]
@@ -227,8 +221,6 @@ class GemmaConversationFormatter(ConversationFormatter):
 
         assert self._tokenize_with_image_symbol(prompt) == input_ids
         assert len(input_ids) == len(labels)
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-        labels = torch.tensor(labels, dtype=torch.long)
 
         return prompt, input_ids, labels
 

@@ -1,11 +1,13 @@
+import logging
 import os
 from datetime import datetime
 from importlib import import_module
-from typing import List, Union, Callable, Optional
+from typing import List, Union, Callable, Optional, Dict
 
+import PIL.Image
 import deepspeed
 import torch
-from torch import Tensor, LongTensor, IntTensor
+from torch import Tensor
 from torch.nn import init
 from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM
 from transformers.cache_utils import HybridCache
@@ -14,15 +16,16 @@ from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled, deep
 
 from ovis.model.configuration_ovis import OvisConfig
 from ovis.model.conversation_formatter import ConversationFormatter
-from ovis.util.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, BEGIN_LINE, END_LINE
+from ovis.util.constants import IGNORE_ID, BEGIN_LINE, END_LINE, IMAGE_ATOM_ID, IMAGE_INDICATOR_IDS, \
+    IMAGE_TOKEN_ID
 from ovis.util.utils import rank0_print
 
 
 class VisualEmbedding(torch.nn.Embedding):
-    def forward(self, input: Tensor) -> Tensor:
-        if any((isinstance(input, LongTensor), isinstance(input, IntTensor))):
-            return super().forward(input)
-        return torch.matmul(input, self.weight)
+    def forward(self, visual_tokens: Tensor) -> Tensor:
+        if visual_tokens.dtype in [torch.int8, torch.int16, torch.int32, torch.int64, torch.long]:
+            return super().forward(visual_tokens)
+        return torch.matmul(visual_tokens, self.weight)
 
     def reset_parameters(self, mean=0., std=1.) -> None:
         init.normal_(self.weight, mean=mean, std=std)
@@ -48,8 +51,8 @@ class Ovis(OvisPreTrainedModel):
             self.config.visual_tokenizer_config = self.visual_tokenizer.config
         else:
             attn_kwargs = dict()
-            if kwargs.get('train_attn_implementation', None) is not None:
-                attn_kwargs['attn_implementation'] = kwargs.pop('train_attn_implementation')
+            if self.config.llm_attn_implementation:
+                attn_kwargs['attn_implementation'] = self.config.llm_attn_implementation
             self.llm = AutoModelForCausalLM.from_config(self.config.llm_config, **attn_kwargs)
             assert self.config.hidden_size == self.llm.config.hidden_size, "hidden size mismatch"
             self.text_tokenizer = AutoTokenizer.from_pretrained(self.config.name_or_path)
@@ -86,6 +89,10 @@ class Ovis(OvisPreTrainedModel):
 
     def get_visual_tokenizer(self):
         return self.visual_tokenizer
+
+    def tie_weights(self):
+        if not self.config.disable_tie_weight:
+            self.get_llm().tie_weights()
 
     def re_init_vte(self, mean, std):
         vte = self.get_vte()
@@ -147,13 +154,22 @@ class Ovis(OvisPreTrainedModel):
         return self.llm(inputs_embeds=inputs_embeds, labels=labels, attention_mask=attention_mask, **kwargs)
 
     def merge_multimodal(
-            self,
-            text_input_ids: torch.Tensor,
-            text_attention_masks: torch.Tensor,
-            text_labels: Optional[torch.Tensor],
-            pixel_values: List[Optional[torch.Tensor]]
+        self,
+        text_input_ids: torch.Tensor,
+        text_attention_masks: torch.Tensor,
+        text_labels: Optional[torch.Tensor],
+        pixel_values: List[Optional[torch.Tensor]]
     ):
         input_device = text_input_ids.device
+        visual_vocab_szie = self.get_visual_tokenizer().config.vocab_size
+        visual_indicator_embeds = self.get_vte()(
+            torch.tensor(
+                list(range(visual_vocab_szie - 5, visual_vocab_szie)),
+                dtype=torch.long,
+                device=self.get_visual_tokenizer().device
+            )
+        ).to(device=input_device)
+
         if self.training:
             # When training, to be compatible with deepspeed zero, each sample has to include pixel_value tensor.
             # For text-only sample, one can simply use a full zero tensor as pixel_value, which will be ignored
@@ -164,7 +180,7 @@ class Ovis(OvisPreTrainedModel):
                                         split_size_or_sections=num_images, dim=0)
             visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
                                            split_size_or_sections=num_images, dim=0)
-            visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long, device=input_device) for x in
+            visual_labels = [torch.full(x.shape, IGNORE_ID, dtype=torch.long, device=input_device) for x in
                              visual_input_ids]
         else:
             # When inference, sample can include only text with `None` pixel_value
@@ -175,7 +191,7 @@ class Ovis(OvisPreTrainedModel):
                                             split_size_or_sections=num_images, dim=0)
                 visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
                                                split_size_or_sections=num_images, dim=0)
-                visual_labels = [torch.full(x.shape, IGNORE_INDEX, dtype=torch.long, device=input_device) for x in
+                visual_labels = [torch.full(x.shape, IGNORE_ID, dtype=torch.long, device=input_device) for x in
                                  visual_input_ids]
             else:
                 # just placeholders
@@ -183,7 +199,7 @@ class Ovis(OvisPreTrainedModel):
                 visual_input_ids = [None] * len(num_images)
                 visual_labels = [None] * len(num_images)
             # just placeholders
-            text_labels = torch.full(text_input_ids.shape, IGNORE_INDEX, dtype=torch.long, device=input_device)
+            text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
 
         input_embeds = []
         attention_masks = []
@@ -191,33 +207,35 @@ class Ovis(OvisPreTrainedModel):
         for text_input_id, text_label, text_attention_mask, visual_embed, visual_input_id, visual_label in zip(
                 text_input_ids, text_labels, text_attention_masks, visual_embeds, visual_input_ids, visual_labels
         ):
-            image_token_mask = torch.eq(text_input_id, IMAGE_TOKEN_INDEX)
-            text_embed = self.get_wte()(torch.masked_fill(text_input_id, image_token_mask, 0))
-            image_token_positions = torch.where(image_token_mask)[0].tolist()
-            if len(image_token_positions) > 0:
+            placeholder_token_mask = torch.lt(text_input_id, 0)
+            text_embed = self.get_wte()(torch.masked_fill(text_input_id, placeholder_token_mask, 0))
+            for i, indicator_id in enumerate(IMAGE_INDICATOR_IDS):
+                text_embed[text_input_id == indicator_id] = visual_indicator_embeds[i]
+            image_atom_positions = torch.where(torch.eq(text_input_id, IMAGE_ATOM_ID))[0].tolist()
+            if len(image_atom_positions) > 0:
                 input_embed_parts = []
                 attention_mask_parts = []
                 label_parts = []
-                prev_image_token_position = -1
-                for index, image_token_position in enumerate(image_token_positions):
+                prev_image_atom_position = -1
+                for index, image_atom_position in enumerate(image_atom_positions):
                     input_embed_parts.append(
-                        text_embed[prev_image_token_position + 1:image_token_position, :])
+                        text_embed[prev_image_atom_position + 1:image_atom_position, :])
                     label_parts.append(
-                        text_label[prev_image_token_position + 1:image_token_position])
+                        text_label[prev_image_atom_position + 1:image_atom_position])
                     attention_mask_parts.append(
-                        text_attention_mask[prev_image_token_position + 1:image_token_position])
+                        text_attention_mask[prev_image_atom_position + 1:image_atom_position])
                     input_embed_parts.append(visual_embed[index])
                     attention_mask_parts.append(
                         torch.ones_like(visual_label[index], dtype=torch.bool))
                     label_parts.append(visual_label[index])
-                    prev_image_token_position = image_token_position
-                if prev_image_token_position + 1 < text_input_id.shape[0]:
+                    prev_image_atom_position = image_atom_position
+                if prev_image_atom_position + 1 < text_input_id.shape[0]:
                     input_embed_parts.append(
-                        text_embed[prev_image_token_position + 1:, :])
+                        text_embed[prev_image_atom_position + 1:, :])
                     attention_mask_parts.append(
-                        text_attention_mask[prev_image_token_position + 1:])
+                        text_attention_mask[prev_image_atom_position + 1:])
                     label_parts.append(
-                        text_label[prev_image_token_position + 1:])
+                        text_label[prev_image_atom_position + 1:])
                 input_embed = torch.cat(input_embed_parts, dim=0)
                 attention_mask = torch.cat(attention_mask_parts, dim=0)
                 label = torch.cat(label_parts, dim=0)
@@ -226,21 +244,91 @@ class Ovis(OvisPreTrainedModel):
                 attention_mask = text_attention_mask
                 label = text_label
                 if self.training:
-                    # Make visual_embed involved in the backward graph, to be compatible with deepspeed zero and ddp.
-                    input_embed += torch.sum(visual_embed * 0.0)
+                    # Make visual_embed & visual_indicator_embeds involved in the backward graph,
+                    # to be compatible with deepspeed zero and ddp.
+                    input_embed += torch.sum(visual_embed * 0.0) + torch.sum(visual_indicator_embeds * 0.0)
             input_embeds.append(input_embed)
             attention_masks.append(attention_mask)
             labels.append(label)
 
+        if self.training:  # padding to self.config.multimodal_max_length for increased training speed
+            padding_size = max(0, self.config.multimodal_max_length - len(input_embeds[0]))
+            input_embeds[0] = torch.nn.ConstantPad2d((0, 0, 0, padding_size), 0.0)(input_embeds[0])
+            attention_masks[0] = torch.nn.ConstantPad1d((0, padding_size), False)(attention_masks[0])
+            labels[0] = torch.nn.ConstantPad1d((0, padding_size), IGNORE_ID)(labels[0])
         batch_input_embeds = torch.nn.utils.rnn.pad_sequence(input_embeds, batch_first=True, padding_value=0.0)[:,
                              :self.config.multimodal_max_length, :]
         batch_attention_mask = torch.nn.utils.rnn.pad_sequence(attention_masks, batch_first=True, padding_value=False)[
                                :,
                                :self.config.multimodal_max_length]
-        batch_labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=IGNORE_INDEX)[:,
+        batch_labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=IGNORE_ID)[:,
                        :self.config.multimodal_max_length]
 
         return visual_input_ids, batch_input_embeds, batch_labels, batch_attention_mask
+
+    def preprocess_inputs(
+        self,
+        text_or_conversations: Union[List[Dict], str],
+        images: Optional[List[PIL.Image.Image]],
+        max_partition=9,
+        generation_preface='',
+        return_labels=False,
+        propagate_exception=True
+    ):
+        # convert text to conversations
+        if isinstance(text_or_conversations, str):
+            conversations = [{
+                "from": "human",
+                "value": text_or_conversations
+            }]
+        elif isinstance(text_or_conversations, list):
+            conversations = text_or_conversations
+        else:
+            raise ValueError(f'Invalid type of `text_or_conversations`, expected `List[Dict]` or `str`,'
+                             f' but got {type(text_or_conversations)}')
+
+        # format conversations
+        prompt, raw_input_ids, raw_labels = self.get_conversation_formatter().format(
+            conversations, generation_preface=generation_preface)
+
+        # place image placeholders
+        input_ids = []
+        labels = []
+        pixel_values = []
+        invalidate_label = False
+        image_token_indices = [i for i, v in enumerate(raw_input_ids) if v == IMAGE_TOKEN_ID]
+        last_image_token_index = -1
+        for i in range(len(image_token_indices)):
+            head = 0 if i == 0 else image_token_indices[i - 1] + 1
+            tail = image_token_indices[i]
+            last_image_token_index = tail
+            input_ids.extend(raw_input_ids[head:tail])
+            labels.extend(raw_labels[head:tail])
+            try:
+                image = images[i]
+                raw_pixel_values, image_placeholders = self.visual_tokenizer.preprocess_image(
+                    image, max_partition=max_partition)
+            except Exception as e:
+                if propagate_exception:
+                    raise e
+                logging.exception(e)
+                invalidate_label = True
+                raw_pixel_values, image_placeholders = self.visual_tokenizer.mock_input()
+            input_ids.extend(image_placeholders)
+            labels.extend([IGNORE_ID] * len(image_placeholders))
+            pixel_values.append(raw_pixel_values)
+        input_ids.extend(raw_input_ids[last_image_token_index + 1:])
+        labels.extend(raw_labels[last_image_token_index + 1:])
+
+        # return tensors
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+        labels = torch.tensor([IGNORE_ID] * len(labels) if invalidate_label else labels, dtype=torch.long)
+        pixel_values = torch.cat(pixel_values, dim=0) if len(pixel_values) > 0 else None
+
+        if return_labels:
+            return prompt, input_ids, pixel_values, labels
+        else:
+            return prompt, input_ids, pixel_values
 
     def save_pretrained(
         self,

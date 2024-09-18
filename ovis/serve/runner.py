@@ -16,6 +16,7 @@ class RunnerArguments:
     top_p: Optional[float] = field(default=None)
     top_k: Optional[int] = field(default=None)
     temperature: Optional[float] = field(default=None)
+    max_partition: int = field(default=9)
 
 
 class OvisRunner:
@@ -32,6 +33,7 @@ class OvisRunner:
         self.visual_tokenizer = self.model.get_visual_tokenizer()
         self.conversation_formatter = self.model.get_conversation_formatter()
         self.image_placeholder = IMAGE_TOKEN
+        self.max_partition = args.max_partition
         self.gen_kwargs = dict(
             max_new_tokens=args.max_new_tokens,
             do_sample=args.do_sample,
@@ -58,21 +60,19 @@ class OvisRunner:
                 images.append(data)
             elif isinstance(data, str):
                 query += data.replace(self.image_placeholder, '')
-            else:
+            elif data is not None:
                 raise RuntimeError(f'Invalid input type, expected `PIL.Image.Image` or `str`, but got {type(data)}')
 
         # format conversation
-        prompt, input_ids = self.conversation_formatter.format_query(query)
+        prompt, input_ids, pixel_values = self.model.preprocess_inputs(
+            query, images, max_partition=self.max_partition)
         attention_mask = torch.ne(input_ids, self.text_tokenizer.pad_token_id)
         input_ids = input_ids.unsqueeze(0).to(device=self.device)
         attention_mask = attention_mask.unsqueeze(0).to(device=self.device)
-
-        # preprocess images
-        if len(images) == 0:
-            pixel_values = [None]
+        if pixel_values is not None:
+            pixel_values = [pixel_values.to(device=self.device, dtype=self.dtype)]
         else:
-            preprocessed_images = [self.visual_tokenizer.preprocess_image(image) for image in images]
-            pixel_values = [torch.cat(preprocessed_images, dim=0).to(device=self.device, dtype=self.dtype)]
+            pixel_values = [None]
 
         return prompt, input_ids, attention_mask, pixel_values
 

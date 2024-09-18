@@ -49,12 +49,13 @@ def train():
         # 1. construct ovis config
         ovis_config = OvisConfig(
             multimodal_max_length=model_args.multimodal_max_length,
-            conversation_formatter_class=model_args.conversation_formatter_class
+            conversation_formatter_class=model_args.conversation_formatter_class,
+            llm_attn_implementation=model_args.llm_attn_implementation
         )
         # 2. load pretrained llm and text tokenizer
         attn_kwargs = dict()
-        if training_args.train_attn_implementation is not None:
-            attn_kwargs['attn_implementation'] = training_args.train_attn_implementation
+        if model_args.llm_attn_implementation:
+            attn_kwargs['attn_implementation'] = model_args.llm_attn_implementation
         llm = AutoModelForCausalLM.from_pretrained(model_args.llm_name_or_path, **attn_kwargs)
         text_tokenizer = AutoTokenizer.from_pretrained(model_args.llm_name_or_path)
         if text_tokenizer.pad_token_id is None and model_args.pad_token_id is not None:
@@ -74,10 +75,8 @@ def train():
                 tokenize_function=model_args.visual_tokenize_function,
                 tau=model_args.visual_tau,
                 depths=model_args.visual_depths,
-                use_indicators=model_args.visual_use_indicators,
                 drop_cls_token=model_args.visual_drop_cls_token,
                 hidden_stride=model_args.visual_hidden_stride,
-                hd_booster=model_args.visual_hd_booster
             )
             visual_tokenizer = AutoModel.from_config(visual_tokenizer_config, train_from_scratch=True)
         visual_tokenizer = visual_tokenizer.to(
@@ -87,15 +86,13 @@ def train():
         # 4. construct ovis model
         model = Ovis(ovis_config, llm=llm, text_tokenizer=text_tokenizer, visual_tokenizer=visual_tokenizer,
                      train_from_scratch=True)
-    else:  # load pretrained ovis model (S2, S3)
+    else:  # load pretrained ovis model
         model, loading_info = Ovis.from_pretrained(training_args.ovis_pretrained_path,
                                                    multimodal_max_length=model_args.multimodal_max_length,
-                                                   train_attn_implementation=training_args.train_attn_implementation,
                                                    output_loading_info=True)
         rank0_print(BEGIN_LINE)
         rank0_print(f'Loading info of Ovis:\n{loading_info}')
         rank0_print(END_LINE)
-        training_args.visual_re_init_layer_begin = None  # re_init a pretrained Ovis is harmful, so disabled
         training_args.vte_re_init = False
 
     model.get_llm().config.use_cache = False
@@ -105,10 +102,6 @@ def train():
     rank0_print(BEGIN_LINE)
     rank0_print(f'model.config:\n{model.config}')
     rank0_print(END_LINE)
-
-    # maybe re-init some visual backbone layers
-    if training_args.visual_re_init_layer_begin is not None and training_args.visual_tokenizer_pretrained_path is None:
-        model.get_visual_tokenizer().re_init_layers(training_args.visual_re_init_layer_begin)
 
     # maybe re-init vte
     if training_args.vte_re_init:
@@ -129,12 +122,6 @@ def train():
             model.get_visual_tokenizer().requires_grad_(True)
         elif module == 'visual_tokenizer.backbone':
             model.get_visual_tokenizer().get_backbone().requires_grad_(True)
-        elif module == 'visual_tokenizer.re_init_layers':
-            assert training_args.visual_re_init_layer_begin is not None, \
-                "To train `visual_tokenizer.re_init_layers`, you need set `visual_re_init_layer_begin` in training args"
-            for name, layer in model.get_visual_tokenizer().get_re_init_layer_dict(
-                    training_args.visual_re_init_layer_begin).items():
-                layer.requires_grad_(True)
         elif module.startswith('visual_tokenizer.backbone.layer.'):
             layer_index = int(module[len('visual_tokenizer.backbone.layer.'):])
             layer = model.get_visual_tokenizer().get_backbone_layer(layer_index)
@@ -151,6 +138,7 @@ def train():
     for name, param in model.named_parameters():
         if param.requires_grad:
             rank0_print(name)
+    rank0_print(f'LLM\'s attn implementation: {model.get_llm().config._attn_implementation}')
     rank0_print(END_LINE)
 
     # construct data module
@@ -182,7 +170,8 @@ def train():
         model=model,
         args=training_args,
         callbacks=train_callbacks,
-        **data_module)
+        **data_module
+    )
     rank0_print(BEGIN_LINE)
     rank0_print('Dataset sample tensor:')
     rank0_print(data_module['train_dataset'][0])

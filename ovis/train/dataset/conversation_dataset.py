@@ -7,7 +7,6 @@ from typing import Dict
 import torch
 
 from ovis.train.dataset.multimodal_dataset import MultimodalDataset
-from ovis.util.constants import IGNORE_INDEX
 from ovis.util.utils import rank0_print
 
 
@@ -24,19 +23,13 @@ class ConversationDataset(MultimodalDataset):
     def __getitem__(self, i: int) -> Dict[str, torch.Tensor]:
         sample = self.samples[i]
         conversations = copy.deepcopy(sample["conversations"])
-        prompt, input_ids, labels = self.conversation_formatter.format(conversations)
-        input_ids = input_ids[:self.text_max_length]
-        labels = labels[:self.text_max_length]
 
+        images = None
+        max_partition = None
         if 'image' in sample:
-            valid_images = False
-            pixel_values = None
-
-            # read images
             image_paths = sample['image']
             if isinstance(image_paths, str):
                 image_paths = [image_paths]
-
             images = []
             for image_path in image_paths:
                 image, e = self.read_image(image_path)
@@ -45,27 +38,30 @@ class ConversationDataset(MultimodalDataset):
                         f'reading image failed with index: {i}, image path: {image_path}, and exception: {e}')
                     images = None
                     break
-                else:
-                    images.append(image)
+                images.append(image)
+        elif 'video' in sample:
+            raise RuntimeError('video is to be supported')
 
-            # process images
-            if images is not None:
-                try:
-                    pixel_values = torch.cat([self.visual_tokenizer.preprocess_image(image) for image in images], dim=0)
-                    valid_images = True
-                except Exception as e:
-                    logging.warning(
-                        f'processing image failed with index: {i}, image paths: {image_paths}, and exception: {e}')
+        if images:
+            max_partition = self.max_partitions[0] if len(images) == 1 else self.max_partitions[1]
 
-            if not valid_images:
-                logging.warning(f'image is not valid, so set labels ignored for sample:\n{sample}')
-                pixel_values = self.visual_tokenizer.get_zero_pixel_values(n=len(image_paths))
-                labels = torch.tensor([IGNORE_INDEX] * len(labels), dtype=torch.long)
-        else:
-            pixel_values = self.visual_tokenizer.get_zero_pixel_values(n=1)
+        prompt, input_ids, pixel_values, labels = self.model.preprocess_inputs(
+            conversations,
+            images,
+            max_partition=max_partition,
+            generation_preface=None,
+            return_labels=True,
+            propagate_exception=False
+        )
+
+        if pixel_values is None:
+            pixel_values, _ = self.visual_tokenizer.mock_input()
+
+        input_ids = input_ids[:self.text_max_length]
+        labels = labels[:self.text_max_length]
 
         return dict(
             pixel_values=pixel_values,
             input_ids=input_ids,
-            labels=labels,
+            labels=labels
         )

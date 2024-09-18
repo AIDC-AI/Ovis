@@ -2,22 +2,23 @@ from typing import Union, Optional
 
 import PIL.Image
 import torch
-import torch.nn.functional as F
+from torch.nn.functional import softmax, gumbel_softmax, pad
 from transformers import PretrainedConfig, PreTrainedModel, AutoImageProcessor, AutoModel, AutoConfig
+from ovis.util.constants import IMAGE_INDICATOR_IDS, IMAGE_ATOM_ID
 
 
 class BaseVisualTokenizerConfig(PretrainedConfig):
-    def __init__(self,
-                 vocab_size=16384,
-                 tokenize_function="softmax",
-                 tau=1.0,
-                 depths=None,
-                 use_indicators=False,
-                 drop_cls_token=False,
-                 backbone_config: Optional[Union[PretrainedConfig, dict]] = None,
-                 hidden_stride: int = 1,
-                 hd_booster: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        vocab_size=16384,
+        tokenize_function="softmax",
+        tau=1.0,
+        depths=None,
+        drop_cls_token=False,
+        backbone_config: Optional[Union[PretrainedConfig, dict]] = None,
+        hidden_stride: int = 1,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.vocab_size = vocab_size
         self.tokenize_function = tokenize_function
@@ -26,7 +27,6 @@ class BaseVisualTokenizerConfig(PretrainedConfig):
             depths = [int(x) for x in depths.split('|')]
         self.depths = depths
         self.backbone_kwargs = {}
-        self.use_indicators = use_indicators
         self.drop_cls_token = drop_cls_token
         if backbone_config is not None:
             assert isinstance(backbone_config, (PretrainedConfig, dict)), \
@@ -37,7 +37,6 @@ class BaseVisualTokenizerConfig(PretrainedConfig):
                 backbone_config = AutoConfig.for_model(model_type, **backbone_config)
         self.backbone_config = backbone_config
         self.hidden_stride = hidden_stride
-        self.hd_booster = hd_booster
 
 
 class BaseVisualTokenizer(PreTrainedModel):
@@ -59,7 +58,14 @@ class BaseVisualTokenizer(PreTrainedModel):
         else:
             self.image_processor = AutoImageProcessor.from_pretrained(kwargs['image_processor_name_or_path'])
             self.backbone = AutoModel.from_config(self.config.backbone_config)
-        self.head = None
+        head_dim = self.config.vocab_size - len(IMAGE_INDICATOR_IDS)  # reserved tokens for IMAGE_INDICATORS
+        self.head = torch.nn.Sequential(
+            torch.nn.Linear(
+                self.backbone.config.hidden_size * self.config.hidden_stride * self.config.hidden_stride, head_dim,
+                bias=False
+            ),
+            torch.nn.LayerNorm(head_dim)
+        )
 
         assert all((self.image_processor.do_resize,
                     not getattr(self.image_processor, 'do_center_crop', False),
@@ -76,14 +82,9 @@ class BaseVisualTokenizer(PreTrainedModel):
     def get_image_processor(self):
         return self.image_processor
 
-    def get_zero_pixel_values(self, n=1):
+    def mock_input(self):
         height, width = self.get_image_size()
-        if self.config.hd_booster is None:
-            return torch.zeros(n, 3, height, width)
-        elif self.config.hd_booster in ['s2wrapper', 's2wrapper-adaptive']:
-            return torch.zeros(n, 3*5, height, width)
-        else:
-            raise ValueError(f'Unsupported hd_booster {self.config.hd_booster}')
+        return torch.zeros(1, 3, height, width), self.construct_image_placeholders((1, 1))
 
     def get_head(self):
         return self.head
@@ -91,14 +92,23 @@ class BaseVisualTokenizer(PreTrainedModel):
     def get_image_size(self):
         raise NotImplementedError
 
-    def preprocess_image(self, image: PIL.Image.Image, convert_to_rgb=True):
-        def _preprocess(img: PIL.Image.Image):
-            # first resize and preprocess
-            sides = self.get_image_size()
-            if sides[0] != sides[1]:
-                raise ValueError('get_image_size() returns non-square size')
-            side = sides[0]
+    @staticmethod
+    def construct_image_placeholders(grid):
+        image_placeholders = [IMAGE_INDICATOR_IDS[0], IMAGE_ATOM_ID, IMAGE_INDICATOR_IDS[1]]
+        if grid[0] * grid[1] > 1:
+            for r in range(grid[0]):
+                for c in range(grid[1]):
+                    image_placeholders.append(IMAGE_ATOM_ID)
+                    if c < grid[1] - 1:
+                        image_placeholders.append(IMAGE_INDICATOR_IDS[2])
+                if r < grid[0] - 1:
+                    image_placeholders.append(IMAGE_INDICATOR_IDS[3])
+        image_placeholders.append(IMAGE_INDICATOR_IDS[4])
+        return image_placeholders
 
+    def preprocess_image(self, image: PIL.Image.Image, max_partition=9, covering_threshold=0.9, convert_to_rgb=True):
+        def _preprocess(img: PIL.Image.Image, side):
+            # first resize and preprocess
             w, h = img.size
             if w == h:
                 new_width = new_height = side
@@ -125,28 +135,72 @@ class BaseVisualTokenizer(PreTrainedModel):
 
             return square_values
 
+        def _partition(img, grid):
+            w, h = img.size
+            row_height = h // grid[0]
+            col_width = w // grid[1]
+
+            partition = []
+            for row in range(grid[0]):
+                for col in range(grid[1]):
+                    left = col * col_width
+                    upper = row * row_height
+                    right = w if col == grid[1] - 1 else (col + 1) * col_width
+                    lower = h if row == grid[0] - 1 else (row + 1) * row_height
+                    partition.append((left, upper, right, lower))
+
+            return partition
+
+        def _covering_area(left, upper, right, lower, side):
+            w = right - left
+            h = lower - upper
+            w, h = max(w, h), min(w, h)
+            if w > side:
+                h = h / w * side
+                w = side
+            return w * h
+
+        def _get_best_grid(img, side):
+            img_area = img.size[0] * img.size[1]
+
+            candidate_grids = []
+            for i in range(1, max_partition + 1):
+                for j in range(1, max_partition + 1):
+                    if i * j <= max_partition:
+                        candidate_grids.append((i, j))
+
+            all_grids = []
+            good_grids = []
+            for grid in candidate_grids:
+                partition = _partition(img, grid)
+                covering_ratio = sum([_covering_area(*p, side) for p in partition]) / img_area
+                assert covering_ratio <= 1.0
+                all_grids.append((grid, covering_ratio))
+                if covering_ratio > covering_threshold:
+                    good_grids.append((grid, covering_ratio))
+
+            if len(good_grids) > 0:
+                # pick the good partition with minimum #sub_images and break the tie using covering_ratio
+                return sorted(good_grids, key=lambda x: (x[0][0] * x[0][1], -x[1]))[0][0]
+            else:
+                # pick the partition with maximum covering_ratio and break the tie using #sub_images
+                return sorted(all_grids, key=lambda x: (-x[1], x[0][0] * x[0][1]))[0][0]
+
         if convert_to_rgb and image.mode != 'RGB':
             image = image.convert('RGB')
 
-        if self.config.hd_booster is None:
-            return _preprocess(image)  # [1, 3, side, side]
-        elif self.config.hd_booster in ['s2wrapper', 's2wrapper-adaptive']:
-            width, height = image.size
-            is_low_resolution = height < self.get_image_size()[0] * 1.5 or width < self.get_image_size()[1] * 1.5
-            if self.config.hd_booster == 's2wrapper-adaptive' and is_low_resolution:
-                values = self.get_zero_pixel_values() + torch.inf
-                values[0][:3] = _preprocess(image)[0]
-            else:
-                center_x, center_y = width // 2, height // 2
-                image_top_left = image.crop((0, 0, center_x, center_y))
-                image_top_right = image.crop((center_x, 0, width, center_y))
-                image_bottom_left = image.crop((0, center_y, center_x, height))
-                image_bottom_right = image.crop((center_x, center_y, width, height))
-                imgs = [image, image_top_left, image_top_right, image_bottom_left, image_bottom_right]
-                values = torch.cat([_preprocess(img) for img in imgs], dim=1)
-            return values  # [1, 3*5, side, side]
-        else:
-            raise ValueError(f'Unsupported hd_booster {self.config.hd_booster}')
+        sides = self.get_image_size()
+        if sides[0] != sides[1]:
+            raise ValueError('get_image_size() returns non-square size')
+        side = sides[0]
+        grid = _get_best_grid(image, side)
+        partition = _partition(image, grid)
+        crops = [image.crop(p) for p in partition]
+        if len(crops) > 1:
+            crops.insert(0, image)
+        pixel_values = torch.cat([_preprocess(crop, side) for crop in crops], dim=0)
+        image_placeholders = self.construct_image_placeholders(grid)
+        return pixel_values, image_placeholders
 
     def get_backbone_layer(self, index):
         return self.backbone.vision_model.encoder.layers[index]
@@ -159,12 +213,52 @@ class BaseVisualTokenizer(PreTrainedModel):
             return ret
 
         if self.config.tokenize_function == 'softmax':
-            tokens = F.softmax(logits, dim=-1)
+            tokens = softmax(logits, dim=-1)
         elif self.config.tokenize_function == 'gumbel_argmax':
-            tokens = F.gumbel_softmax(logits, tau=self.config.tau, hard=True)
+            tokens = gumbel_softmax(logits, tau=self.config.tau, hard=True)
         elif self.config.tokenize_function == 'st_argmax':
             tokens = st_argmax(logits, dim=-1)
         else:
             raise ValueError(
                 f'Invalid `max_type`, expected softmax or gumbel_argmax or st_argmax, but got {self.config.tokenize_function}')
+        return tokens
+
+    def encode(self, pixel_values):
+        output = self.backbone(pixel_values, output_hidden_states=True, return_dict=True)
+        features = output.hidden_states[-1]
+        if self.config.drop_cls_token:
+            features = features[:, 1:, :]
+
+        # merge number of `hidden_stride * hidden_stride` hidden states together to reduce token sequence length
+        # e.g., for hidden_stride=3, this leads to a token length reduction: 729 -> 81 for siglip
+        if self.config.hidden_stride > 1:
+            n, l, d = features.shape  # this `d` maybe different from the above `d
+            sqrt_l = int(l ** 0.5)
+            assert sqrt_l ** 2 == l, "The token sequence length should be a perfect square."
+            features = features.reshape(n, sqrt_l, sqrt_l, d)
+            pl = (self.config.hidden_stride - (sqrt_l % self.config.hidden_stride)) % self.config.hidden_stride
+            features = pad(features, (0, 0, 0, pl, 0, pl), "constant", 0)
+            sqrt_l += pl
+            features = features.reshape(n, sqrt_l // self.config.hidden_stride, self.config.hidden_stride,
+                                        sqrt_l // self.config.hidden_stride, self.config.hidden_stride, d)
+            features = features.permute(0, 1, 3, 2, 4, 5)  # [n, sqrt_l/hs, sqrt_l/hs, hs, hs, d]
+            features = features.flatten(3)  # [n, sqrt_l/hs, sqrt_l/hs, hs*hs*d]
+            features = features.reshape(
+                n, -1, self.config.hidden_stride * self.config.hidden_stride * d)
+
+        return features
+
+    def forward(self, pixel_values) -> torch.Tensor:  # [BatchSize, ImageShape] -> [BatchSize, #Token, VocabSize]
+        features = self.encode(pixel_values)
+        logits = self.head(features)
+        tokens = self.tokenize(logits)
+        # tokens' shape is [BatchSize, #Token, VocabSize-5], so padding with [BatchSize, #Token, 5], after
+        # which, tokens' shape should become [BatchSize, #Token, VocabSize]
+        batch_size, token_len, _ = tokens.shape
+        padding_tensor = torch.zeros(size=(batch_size, token_len, len(IMAGE_INDICATOR_IDS)),
+                                     dtype=tokens.dtype,
+                                     device=tokens.device,
+                                     layout=tokens.layout,
+                                     requires_grad=False)
+        tokens = torch.cat((tokens, padding_tensor), dim=2)
         return tokens
