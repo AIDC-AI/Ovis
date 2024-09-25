@@ -37,7 +37,7 @@ Ovis can be instantiated with popular LLMs. We provide the following Ovis MLLMs:
 
 | Ovis MLLMs        | ViT         | LLM                |                          Model Weights                          |
 |:------------------|:-----------:|:------------------:|:---------------------------------------------------------------:|
-| Ovis1.6-Gemma2-9B | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B) |
+| Ovis1.6-Gemma2-9B | Siglip-400M | Gemma2-9B-It       | [Hugging Face](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B) |
 
 ## Performance
 With just **10B** parameters, Ovis1.6-Gemma2-9B leads the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark among open-source MLLMs within **30B** parameters.
