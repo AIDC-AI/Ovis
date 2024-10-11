@@ -45,7 +45,7 @@ With just **10B** parameters, Ovis1.6-Gemma2-9B leads the [OpenCompass](https://
 ![performance-Ovis1_6-Gemma2-9B](docs/performance/Ovis1_6-Gemma2-9B.png)
 
 ## Finetune
-Coming soon
+Finetuning Ovis1.6-Gemma2-9B is supported in [ms-swift](https://github.com/modelscope/ms-swift).
 
 ## Inference
 We provide an inference wrapper in `ovis/serve/runner.py`, which can be used as:
