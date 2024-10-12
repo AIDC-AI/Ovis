@@ -80,7 +80,7 @@ This work is a collaborative effort by the MarcoVL team. We would also like to p
 - [Wings: Learning Multimodal LLMs without Text-only Forgetting](https://arxiv.org/abs/2406.03496)
 
 ## License
-This project is licensed under the Apache License, Version 2.0 (SPDX-License-Identifier: Apache-2.0).
+This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) (SPDX-License-Identifier: Apache-2.0).
 
 ## Disclaimer
 We used compliance-checking algorithms during the training process, to ensure the compliance of the trained model to the best of our ability. Due to the complexity of the data and the diversity of language model usage scenarios, we cannot guarantee that the model is completely free of copyright issues or improper content. If you believe anything infringes on your rights or generates improper content, please contact us, and we will promptly address the matter.
