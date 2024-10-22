@@ -7,7 +7,8 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 </div>
 
 ## Release
-- [09/19] 🔥 Announcing Ovis1.6 ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B))! This latest release further enhances high-resolution image processing, is trained on a larger, more diverse, and higher-quality dataset, and refines the training process with DPO training following instruction-tuning.
+- [10/22] 🔥 Announcing Ovis1.6-Llama3.2-3B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Llama3.2-3B))!
+- [09/19] 🔥 Announcing Ovis1.6-Gemma2-9B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B))! This latest release further enhances high-resolution image processing, is trained on a larger, more diverse, and higher-quality dataset, and refines the training process with DPO training following instruction-tuning.
 - [07/24] 🔥 Introducing Ovis1.5, featuring improved high-resolution image processing and optimized training data for enhanced performance.
 - [06/14] 🔥 Launch of Ovis1.0, the inaugural version of the Ovis model.
 
@@ -35,14 +36,19 @@ pip install -e .
 ## Model
 Ovis can be instantiated with popular LLMs. We provide the following Ovis MLLMs:
 
-| Ovis MLLMs        | ViT         | LLM                |                          Model Weights                          |
-|:------------------|:-----------:|:------------------:|:---------------------------------------------------------------:|
-| Ovis1.6-Gemma2-9B | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B) |
+| Ovis MLLMs        | ViT         | LLM                |                          Model Weights                          | Demo                                                             |
+|:------------------|:-----------:|:------------------:|:---------------------------------------------------------------:|:----------------------------------------------------------------:|
+| Ovis1.6-Gemma2-9B | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B) |
+| Ovis1.6-Llama3.2-3B | Siglip-400M | Llama-3.2-3B-Instruct       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Llama3.2-3B) |
 
 ## Performance
-With just **10B** parameters, Ovis1.6-Gemma2-9B leads the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark among open-source MLLMs within **30B** parameters.
+With just **10B** parameters, **Ovis1.6-Gemma2-9B** leads the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark among open-source MLLMs within **30B** parameters.
 
 ![performance-Ovis1_6-Gemma2-9B](docs/performance/Ovis1_6-Gemma2-9B.png)
+
+**Ovis1.6-Llama3.2-3B** leads the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark among open-source MLLMs under **4B** parameters, even surpassing Llama-3.2-11B-Vision-Instruct.
+
+![performance-Ovis1_6-Llama3_2-3B](docs/performance/Ovis1_6-Llama3_2-3B.png)
 
 ## Finetune
 Finetuning Ovis1.6-Gemma2-9B is supported in [ms-swift](https://github.com/modelscope/ms-swift).
