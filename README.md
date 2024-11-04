@@ -7,6 +7,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 </div>
 
 ## Release
+- [11/04] 🔥 Announcing quantized Ovis1.6: [Ovis1.6-Gemma2-9B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B-GPTQ-Int4) and [Ovis1.6-Llama3.2-3B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B-GPTQ-Int4)!
 - [10/22] 🔥 Announcing Ovis1.6-Llama3.2-3B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Llama3.2-3B))!
 - [09/19] 🔥 Announcing Ovis1.6-Gemma2-9B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B))! This latest release further enhances high-resolution image processing, is trained on a larger, more diverse, and higher-quality dataset, and refines the training process with DPO training following instruction-tuning.
 - [07/24] 🔥 Introducing Ovis1.5, featuring improved high-resolution image processing and optimized training data for enhanced performance.
@@ -18,6 +19,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 - [Performance](#performance)
 - [Finetune](#finetune)
 - [Inference](#inference)
+- [Quantization](#quantization)
 - [Citation](#citation)
 - [Team](#team)
 - [License](#license)
@@ -68,6 +70,13 @@ Based on [Gradio](https://github.com/gradio-app/gradio), Ovis can also be access
 ```bash
 python ovis/serve/server.py --model_path MODEL_PATH --port PORT
 ```
+
+## Quantization
+We quantized Ovis1.6 using AutoGPTQ. For detailed information on running and creating your own quantized version, please refer to the respective Huggingface model cards: [Ovis1.6-Gemma2-9B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B-GPTQ-Int4) and [Ovis1.6-Llama3.2-3B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B-GPTQ-Int4). Quantized Ovis1.6 maintains performance comparable to its non-quantized counterpart while requiring less GPU memory:
+
+![performance-Ovis1_6-Gemma2-9B-GPTQ-Int4](docs/performance/Ovis1_6-Gemma2-9B-GPTQ-Int4.png)
+![performance-Ovis1_6-Llama3_2-3B-GPTQ-Int4](docs/performance/Ovis1_6-Llama3_2-3B-GPTQ-Int4.png)
+![performance-Ovis1_6-VRAM-Comparison](docs/performance/Ovis1_6-VRAM-Comparison.png)
 
 ## Citation
 If you find Ovis useful, please cite the paper
