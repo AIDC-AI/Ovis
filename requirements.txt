@@ -1,9 +1,9 @@
-torch==2.2.0
-transformers==4.44.2
-tokenizers==0.19.1
+torch==2.4.0
+transformers==4.46.2
+tokenizers==0.20.3
 sentencepiece==0.1.99
 pyarrow==14.0.2
-accelerate==0.29.0
+accelerate==1.1.0
 pydantic==2.8.2
 markdown2[all]
 numpy==1.24.3
@@ -22,5 +22,5 @@ pandas
 torchaudio
 xformers
 pillow==10.3.0
-deepspeed==0.14.4
+deepspeed==0.15.4
 gradio

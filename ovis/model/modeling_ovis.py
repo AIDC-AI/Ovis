@@ -1,5 +1,7 @@
 import logging
 import os
+
+from packaging import version
 from datetime import datetime
 from importlib import import_module
 from typing import List, Union, Callable, Optional, Dict
@@ -7,6 +9,7 @@ from typing import List, Union, Callable, Optional, Dict
 import PIL.Image
 import deepspeed
 import torch
+import transformers
 from torch import Tensor
 from torch.nn import init
 from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM
@@ -361,29 +364,46 @@ class Ovis(OvisPreTrainedModel):
         #                                             safe_serialization=safe_serialization)
         # self.get_visual_tokenizer().get_image_processor().save_pretrained(visual_tokenizer_directory)
 
-    def _get_hybrid_cache_for_llm(self, max_batch_size: int, max_cache_len: int):
+    def _get_hybrid_cache_for_llm(self, batch_size: int, max_cache_len: int):
         cache_cls = HybridCache
         llm = self.get_llm()
 
-        need_new_cache = (
-            not hasattr(llm, "_cache")
-            or (not isinstance(llm._cache, cache_cls))
-            or llm._cache.max_batch_size != max_batch_size
-            or llm._cache.max_cache_len < max_cache_len
-        )
+        if version.parse(transformers.__version__) >= version.parse("4.46.0"):
+            need_new_cache = (
+                not hasattr(llm, "_cache")
+                or (not isinstance(llm._cache, cache_cls))
+                or llm._cache.batch_size != batch_size
+                or llm._cache.max_cache_len < max_cache_len
+            )
+        else:
+            need_new_cache = (
+                not hasattr(llm, "_cache")
+                or (not isinstance(llm._cache, cache_cls))
+                or llm._cache.max_batch_size != batch_size
+                or llm._cache.max_cache_len < max_cache_len
+            )
 
         if need_new_cache:
             if hasattr(llm.config, "_pre_quantization_dtype"):
                 cache_dtype = llm.config._pre_quantization_dtype
             else:
                 cache_dtype = llm.dtype
-            llm._cache = cache_cls(
-                config=llm.config,
-                max_batch_size=max_batch_size,
-                max_cache_len=max_cache_len,
-                device=llm.device,
-                dtype=cache_dtype,
-            )
+            if version.parse(transformers.__version__) >= version.parse("4.46.0"):
+                llm._cache = cache_cls(
+                    config=llm.config,
+                    batch_size=batch_size,
+                    max_cache_len=max_cache_len,
+                    device=llm.device,
+                    dtype=cache_dtype,
+                )
+            else:
+                llm._cache = cache_cls(
+                    config=llm.config,
+                    max_batch_size=batch_size,
+                    max_cache_len=max_cache_len,
+                    device=llm.device,
+                    dtype=cache_dtype,
+                )
         else:
             llm._cache.reset()
         return llm._cache

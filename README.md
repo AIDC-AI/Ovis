@@ -7,6 +7,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 </div>
 
 ## Release
+- [11/26] 🔥 Announcing [Ovis1.6-Gemma2-27B](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-27B)!
 - [11/04] 🔥 Announcing quantized versions of Ovis1.6: [Ovis1.6-Gemma2-9B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B-GPTQ-Int4) and [Ovis1.6-Llama3.2-3B-GPTQ-Int4](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B-GPTQ-Int4)!
 - [10/22] 🔥 Announcing Ovis1.6-Llama3.2-3B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Llama3.2-3B))!
 - [09/19] 🔥 Announcing Ovis1.6-Gemma2-9B ([Model](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B), [Demo](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B))! This latest release further enhances high-resolution image processing, is trained on a larger, more diverse, and higher-quality dataset, and refines the training process with DPO training following instruction-tuning.
@@ -25,7 +26,7 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
 - [License](#license)
 
 ## Install
-Ovis has been tested with Python 3.10, Torch 2.2.0, Transformers 4.44.2, and DeepSpeed 0.14.4. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before finetuning or inference, please install Ovis as follows.
+Ovis has been tested with Python 3.10, Torch 2.4.0, Transformers 4.46.2, and DeepSpeed 0.15.4. For a comprehensive list of package dependencies, please consult the `requirements.txt` file. Before finetuning or inference, please install Ovis as follows.
 ```bash
 git clone git@github.com:AIDC-AI/Ovis.git
 conda create -n ovis python=3.10 -y
@@ -40,10 +41,15 @@ Ovis can be instantiated with popular LLMs. We provide the following Ovis MLLMs:
 
 | Ovis MLLMs        | ViT         | LLM                |                          Model Weights                          | Demo                                                             |
 |:------------------|:-----------:|:------------------:|:---------------------------------------------------------------:|:----------------------------------------------------------------:|
+| Ovis1.6-Gemma2-27B | Siglip-400M | Gemma2-27B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-27B) | - |
 | Ovis1.6-Gemma2-9B | Siglip-400M | Gemma2-9B-It       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Gemma2-9B) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Gemma2-9B) |
 | Ovis1.6-Llama3.2-3B | Siglip-400M | Llama-3.2-3B-Instruct       | [Huggingface](https://huggingface.co/AIDC-AI/Ovis1.6-Llama3.2-3B) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis1.6-Llama3.2-3B) |
 
 ## Performance
+With **29B** parameters, **Ovis1.6-Gemma2-27B** achieves exceptional performance in the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark, ranking among the top-tier open-source MLLMs.
+
+![performance-Ovis1_6-Gemma2-27B](docs/performance/Ovis1_6-Gemma2-27B.png)
+
 With just **10B** parameters, **Ovis1.6-Gemma2-9B** leads the [OpenCompass](https://github.com/open-compass/VLMEvalKit) benchmark among open-source MLLMs within **30B** parameters.
 
 ![performance-Ovis1_6-Gemma2-9B](docs/performance/Ovis1_6-Gemma2-9B.png)
