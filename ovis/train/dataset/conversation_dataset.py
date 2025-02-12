@@ -7,6 +7,7 @@ from typing import Dict
 import torch
 
 from ovis.train.dataset.multimodal_dataset import MultimodalDataset
+from ovis.util.constants import VIDEO_TOKEN, IMAGE_TOKEN
 from ovis.util.utils import rank0_print
 
 
@@ -25,8 +26,10 @@ class ConversationDataset(MultimodalDataset):
         conversations = copy.deepcopy(sample["conversations"])
 
         images = None
-        max_partition = None
+        max_partition = sample.get('max_partition', None)
+        multimodal_type = "text"
         if 'image' in sample:
+            multimodal_type = "single_image"
             image_paths = sample['image']
             if isinstance(image_paths, str):
                 image_paths = [image_paths]
@@ -39,11 +42,31 @@ class ConversationDataset(MultimodalDataset):
                     images = None
                     break
                 images.append(image)
-        elif 'video' in sample:
-            raise RuntimeError('video is to be supported')
+            if images and len(images) > 1:
+                multimodal_type = "multiple_image"
+        elif "video" in sample or "video_frames" in sample:
+            multimodal_type = "video"
+            images, e = self.read_video(sample, min_frames=self.min_frames, max_frames=self.max_frames)
+            if images:
+                num_video_token = 0
+                for conv in conversations:
+                    if conv['from'] == 'human':
+                        num_video_token += conv['value'].count(VIDEO_TOKEN)
+                        conv['value'] = conv['value'].replace(VIDEO_TOKEN, '\n'.join([IMAGE_TOKEN] * len(images)))
+                if num_video_token != 1:
+                    images = None
+                    logging.warning(f'invalid sample (currently, only supports single <video>): {json.dumps(sample)}')
+            else:
+                logging.warning(
+                    f'reading video failed with index: {i}, and exception: {e} in sample: {json.dumps(sample)}')
 
-        if images:
-            max_partition = self.max_partitions[0] if len(images) == 1 else self.max_partitions[1]
+        conv_text = '\n'.join(conv['value'] for conv in conversations)
+        if multimodal_type == "text":
+            assert conv_text.count(IMAGE_TOKEN) == 0, f'invalid `IMAGE_TOKEN` in sample: {sample}'
+        else:
+            assert images is None or conv_text.count(IMAGE_TOKEN) == len(images), \
+                f'mismatch between #IMAGE_TOKEN and #images in sample: {json.dumps(sample)}'
+            max_partition = max_partition or self.max_partitions[multimodal_type]
 
         prompt, input_ids, pixel_values, labels = self.model.preprocess_inputs(
             conversations,

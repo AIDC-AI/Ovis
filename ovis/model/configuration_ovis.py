@@ -10,7 +10,7 @@ class OvisConfig(PretrainedConfig):
         self,
         llm_config: Optional[Union[PretrainedConfig, dict]] = None,
         visual_tokenizer_config: Optional[Union[PretrainedConfig, dict]] = None,
-        multimodal_max_length=8192,
+        multimodal_max_length=32768,
         hidden_size=None,
         conversation_formatter_class=None,
         llm_attn_implementation=None,

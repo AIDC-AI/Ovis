@@ -78,12 +78,13 @@ class OvisRunner:
 
     def run(self, inputs: List[Union[Image.Image, str]]):
         prompt, input_ids, attention_mask, pixel_values = self.preprocess(inputs)
-        output_ids = self.model.generate(
-            input_ids,
-            pixel_values=pixel_values,
-            attention_mask=attention_mask,
-            **self.gen_kwargs
-        )
+        with torch.inference_mode():
+            output_ids = self.model.generate(
+                input_ids,
+                pixel_values=pixel_values,
+                attention_mask=attention_mask,
+                **self.gen_kwargs
+            )
         output = self.text_tokenizer.decode(output_ids[0], skip_special_tokens=True)
         input_token_len = input_ids.shape[1]
         output_token_len = output_ids.shape[1]

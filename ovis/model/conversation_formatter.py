@@ -15,6 +15,7 @@ class ConversationFormatter(ABC):
         self.image_token = IMAGE_TOKEN
         self.image_token_id = IMAGE_TOKEN_ID
         self.ignore_id = IGNORE_ID
+        self.im_end = None
 
     def _tokenize_with_image_symbol(self, text):
         text_chunks = [self.tokenizer(chunk, add_special_tokens=False).input_ids for chunk in

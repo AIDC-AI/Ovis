@@ -22,8 +22,10 @@ class CaptionDataset(MultimodalDataset):
         sample = self.samples.iloc[i]
         text = sample['caption']
         image_path = sample['image_path']
+        multimodal_type = "single_image"
 
         # read and preprocess image
+        max_partition = sample.get('max_partition') or self.max_partitions[multimodal_type]
         pixel_values, image_placeholders = self.visual_tokenizer.mock_input()
         valid_image = False
         image, e = self.read_image(image_path)
@@ -33,7 +35,7 @@ class CaptionDataset(MultimodalDataset):
         else:
             try:
                 pixel_values, image_placeholders = self.visual_tokenizer.preprocess_image(
-                    image, max_partition=self.max_partitions[0])
+                    image, max_partition=max_partition)
                 valid_image = True
             except Exception as e:
                 logging.warning(

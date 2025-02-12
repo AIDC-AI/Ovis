@@ -83,8 +83,7 @@ class Ovis(OvisPreTrainedModel):
         self.is_parallelizable = all((self.llm.is_parallelizable, self.visual_tokenizer.is_parallelizable))
         self.supports_gradient_checkpointing = all(
             (self.llm.supports_gradient_checkpointing, self.visual_tokenizer.supports_gradient_checkpointing))
-        self._supports_flash_attn_2 = all(
-            (self.llm._supports_flash_attn_2, self.visual_tokenizer._supports_flash_attn_2))
+        self._supports_flash_attn_2 = True
         self._supports_sdpa = all((self.llm._supports_sdpa, self.visual_tokenizer._supports_sdpa))
 
     def get_text_tokenizer(self):
@@ -147,7 +146,7 @@ class Ovis(OvisPreTrainedModel):
         pixel_values: List[Optional[torch.Tensor]],
         **kwargs
     ):
-        assert self.training, "`forward` can only be used in training. For inference, use `generate`."
+        # assert self.training, "`forward` can only be used in training. For inference, use `generate`."
         _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
             text_input_ids=input_ids,
             text_attention_masks=attention_mask,
@@ -161,7 +160,8 @@ class Ovis(OvisPreTrainedModel):
         text_input_ids: torch.Tensor,
         text_attention_masks: torch.Tensor,
         text_labels: Optional[torch.Tensor],
-        pixel_values: List[Optional[torch.Tensor]]
+        pixel_values: List[Optional[torch.Tensor]],
+        left_padding: bool = False
     ):
         input_device = text_input_ids.device
         visual_vocab_szie = self.get_visual_tokenizer().config.vocab_size
@@ -202,7 +202,8 @@ class Ovis(OvisPreTrainedModel):
                 visual_input_ids = [None] * len(num_images)
                 visual_labels = [None] * len(num_images)
             # just placeholders
-            text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
+            if text_labels is None:
+                text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
 
         input_embeds = []
         attention_masks = []
@@ -254,20 +255,19 @@ class Ovis(OvisPreTrainedModel):
             attention_masks.append(attention_mask)
             labels.append(label)
 
-        if self.training:  # padding to self.config.multimodal_max_length for increased training speed
-            padding_size = max(0, self.config.multimodal_max_length - len(input_embeds[0]))
-            input_embeds[0] = torch.nn.ConstantPad2d((0, 0, 0, padding_size), 0.0)(input_embeds[0])
-            attention_masks[0] = torch.nn.ConstantPad1d((0, padding_size), False)(attention_masks[0])
-            labels[0] = torch.nn.ConstantPad1d((0, padding_size), IGNORE_ID)(labels[0])
-        batch_input_embeds = torch.nn.utils.rnn.pad_sequence(input_embeds, batch_first=True, padding_value=0.0)[:,
-                             :self.config.multimodal_max_length, :]
-        batch_attention_mask = torch.nn.utils.rnn.pad_sequence(attention_masks, batch_first=True, padding_value=False)[
-                               :,
-                               :self.config.multimodal_max_length]
-        batch_labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=IGNORE_ID)[:,
-                       :self.config.multimodal_max_length]
+        batch_input_embeds = self.pad_truncate_sequence(input_embeds, batch_first=True, padding_value=0.0, left_padding=left_padding)
+        batch_attention_mask = self.pad_truncate_sequence(attention_masks, batch_first=True, padding_value=False, left_padding=left_padding)
+        batch_labels = self.pad_truncate_sequence(labels, batch_first=True, padding_value=IGNORE_ID, left_padding=left_padding)
 
         return visual_input_ids, batch_input_embeds, batch_labels, batch_attention_mask
+
+    def pad_truncate_sequence(self, sequences: List[torch.Tensor], batch_first: bool = True, padding_value: float = 0.0, left_padding: bool = False) -> torch.Tensor:
+        if not left_padding:
+            pad_sequence = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first, padding_value=padding_value)
+            return pad_sequence[:,:self.config.multimodal_max_length]
+        else:
+            pad_sequence = torch.nn.utils.rnn.pad_sequence([i.flip(dims=[0]) for i in sequences],batch_first=True, padding_value=padding_value).flip(dims=[1])
+            return pad_sequence[:,-self.config.multimodal_max_length:]
 
     def preprocess_inputs(
         self,
@@ -276,7 +276,9 @@ class Ovis(OvisPreTrainedModel):
         max_partition=9,
         generation_preface='',
         return_labels=False,
-        propagate_exception=True
+        propagate_exception=True,
+        frame_selector=None,
+        frame_selector_kwargs=None
     ):
         # convert text to conversations
         if isinstance(text_or_conversations, str):
@@ -289,6 +291,10 @@ class Ovis(OvisPreTrainedModel):
         else:
             raise ValueError(f'Invalid type of `text_or_conversations`, expected `List[Dict]` or `str`,'
                              f' but got {type(text_or_conversations)}')
+
+        if frame_selector is not None:
+            frame_selector_kwargs = frame_selector_kwargs or {}
+            conversations, images = frame_selector(conversations=conversations, frames=images, **frame_selector_kwargs)
 
         # format conversations
         prompt, raw_input_ids, raw_labels = self.get_conversation_formatter().format(
@@ -408,22 +414,23 @@ class Ovis(OvisPreTrainedModel):
             llm._cache.reset()
         return llm._cache
 
-    # TODO: support batch generation
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
         **kwargs
     ) -> Union[GenerateOutput, torch.LongTensor]:
-        assert inputs.shape[0] == 1, 'Currently, only support `batch_size=1`'
         _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
             text_input_ids=inputs,
             text_attention_masks=kwargs.pop('attention_mask'),
             text_labels=None,
-            pixel_values=kwargs.pop('pixel_values')
+            pixel_values=kwargs.pop('pixel_values'),
+            left_padding=True
         )
+        inputs_embeds = inputs_embeds.detach()
+        torch.cuda.empty_cache()
         if getattr(self.generation_config, 'cache_implementation') == 'hybrid':  # mainly for Gemma2
             kwargs['past_key_values'] = self._get_hybrid_cache_for_llm(
-                getattr(kwargs, "num_beams", 1), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
+                getattr(kwargs, "num_beams", inputs_embeds.shape[0]), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
             self.get_llm()._supports_cache_class = True
             kwargs['cache_implementation'] = None
 

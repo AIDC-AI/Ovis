@@ -45,15 +45,13 @@ class BaseVisualTokenizer(PreTrainedModel):
     _image_processor_class = None
     _image_processor_kwargs = {}
     _backbone_class = None
-    _backbone_name_or_path = None
 
     def __init__(self, config: BaseVisualTokenizerConfig, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         if kwargs.get('train_from_scratch'):
-            self.image_processor = self._image_processor_class.from_pretrained(self._backbone_name_or_path,
+            self.image_processor = self._image_processor_class.from_pretrained(kwargs['backbone_name_or_path'],
                                                                                **self._image_processor_kwargs)
-            self.backbone = self._backbone_class.from_pretrained(self._backbone_name_or_path,
-                                                                 **self.config.backbone_kwargs)
+            self.backbone = self._backbone_class.from_pretrained(kwargs['backbone_name_or_path'], **self.config.backbone_kwargs)
             self.config.backbone_config = self.backbone.config
         else:
             self.image_processor = AutoImageProcessor.from_pretrained(kwargs['image_processor_name_or_path'])
@@ -203,7 +201,10 @@ class BaseVisualTokenizer(PreTrainedModel):
         return pixel_values, image_placeholders
 
     def get_backbone_layer(self, index):
-        return self.backbone.vision_model.encoder.layers[index]
+        if 'aimv2' in self.config.model_type:
+            return self.backbone.trunk.blocks[index]
+        else:
+            return self.backbone.vision_model.encoder.layers[index]
 
     def tokenize(self, logits):
         def st_argmax(y_soft, dim):  # straight-through softmax

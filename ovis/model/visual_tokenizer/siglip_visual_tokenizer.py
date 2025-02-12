@@ -24,7 +24,6 @@ class SiglipVisualTokenizer(BaseVisualTokenizer):
     _image_processor_class = SiglipImageProcessor
     _image_processor_kwargs = {}
     _backbone_class = SiglipVisionModel
-    _backbone_name_or_path = "google/siglip-so400m-patch14-384"
 
     def get_monitor_tensors(self):
         return dict(

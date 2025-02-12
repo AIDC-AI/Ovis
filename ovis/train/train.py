@@ -78,7 +78,11 @@ def train():
                 drop_cls_token=model_args.visual_drop_cls_token,
                 hidden_stride=model_args.visual_hidden_stride,
             )
-            visual_tokenizer = AutoModel.from_config(visual_tokenizer_config, train_from_scratch=True)
+            visual_tokenizer = AutoModel.from_config(
+                visual_tokenizer_config,
+                train_from_scratch=True,
+                backbone_name_or_path=training_args.visual_backbone_name_or_path
+            )
         visual_tokenizer = visual_tokenizer.to(
             device=torch.device(get_accelerator().device_name(os.getenv("LOCAL_RANK"))))
         if getattr(training_args, 'hf_deepspeed_config', None) is not None:

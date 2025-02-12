@@ -14,7 +14,7 @@ class ModelArguments:
     visual_tau: float = field(default=1.0)
     visual_depths: Optional[str] = field(default=None)
     visual_hidden_stride: int = field(default=1)
-    multimodal_max_length: int = field(default=2048)
+    multimodal_max_length: int = field(default=3712)
     conversation_formatter_class: str = field(default=None)
     pad_token_id: Optional[int] = field(default=None)
     llm_attn_implementation: Optional[str] = field(default=None)
@@ -27,6 +27,7 @@ class TrainingArguments(transformers.TrainingArguments):
     dataset_info: Optional[str] = field(default='dataset_info_v1_6')
     ovis_pretrained_path: Optional[str] = field(default=None)
     visual_tokenizer_pretrained_path: Optional[str] = field(default=None)
+    visual_backbone_name_or_path: Optional[str] = field(default=None)
     caption_template: Optional[str] = field(default=None)
     stage: Optional[int] = field(default=None)
     train_modules: Optional[str] = field(default=None)
@@ -38,6 +39,8 @@ class TrainingArguments(transformers.TrainingArguments):
     monitor_step: int = field(default=100)
     vte_re_init: bool = field(default=False)
     text_max_length: int = field(default=1024)
+    min_frames: int = field(default=10)
+    max_frames: int = field(default=10)
     max_partitions: str = field(default="9|1|1")
 
     def __post_init__(self):
