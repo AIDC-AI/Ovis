@@ -201,9 +201,9 @@ class Ovis(OvisPreTrainedModel):
                 visual_embeds = [None] * len(num_images)
                 visual_input_ids = [None] * len(num_images)
                 visual_labels = [None] * len(num_images)
-            # just placeholders
-            if text_labels is None:
-                text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
+        # just placeholders
+        if text_labels is None:
+            text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
 
         input_embeds = []
         attention_masks = []
