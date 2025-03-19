@@ -1,0 +1,1 @@
+This directory contains the file for the usage of Ovis2 in vllm
