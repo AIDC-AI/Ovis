@@ -47,6 +47,12 @@ Ovis can be instantiated with popular LLMs. We provide the following Ovis MLLMs:
 | Ovis2-8B   | aimv2-huge-patch14-448  |  Qwen2.5-7B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-8B)  | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis2-8B)  |
 | Ovis2-16B  | aimv2-huge-patch14-448  | Qwen2.5-14B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-16B) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis2-16B) |
 | Ovis2-34B  |  aimv2-1B-patch14-448   | Qwen2.5-32B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-34B) |                            -                             |
+| Ovis2-2B-GPTQ-Int4   | aimv2-large-patch14-448 | Qwen2.5-1.5B-Instruct | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-2B-GPTQ-Int4)  | -  |
+| Ovis2-4B-GPTQ-Int4   | aimv2-huge-patch14-448  |  Qwen2.5-3B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-4B-GPTQ-Int4)  | -  |
+| Ovis2-8B-GPTQ-Int4   | aimv2-huge-patch14-448  |  Qwen2.5-7B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-8B-GPTQ-Int4)  | -  |
+| Ovis2-16B-GPTQ-Int4  | aimv2-huge-patch14-448  | Qwen2.5-14B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-16B-GPTQ-Int4) | - |
+| Ovis2-34B-GPTQ-Int4  |  aimv2-1B-patch14-448   | Qwen2.5-32B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-34B-GPTQ-Int4) | [Space](https://huggingface.co/spaces/AIDC-AI/Ovis2-34B-GPTQ-Int4) |
+| Ovis2-34B-GPTQ-Int8  |  aimv2-1B-patch14-448   | Qwen2.5-32B-Instruct  | [Huggingface](https://huggingface.co/AIDC-AI/Ovis2-34B-GPTQ-Int8) |                            -                             |
 
 ## Performance
 
