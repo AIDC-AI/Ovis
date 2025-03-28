@@ -5,8 +5,8 @@ from torch.nn.functional import gumbel_softmax, pad
 from transformers import AutoImageProcessor
 from vllm.config import QuantizationConfig
 from vllm.model_executor.layers.linear import ColumnParallelLinear
-from app.engine.vllm_model.aimv2.modeling_aimv2 import AIMv2Model
-from app.engine.vllm_model.ovis_config import BaseVisualTokenizerConfig
+from .aimv2.modeling_aimv2 import AIMv2Model
+from ..ovis_config import BaseVisualTokenizerConfig
 IMAGE_INDICATOR_IDS = [-301, -302, -303, -304, -305] # kept for vocab prefixed tokens
 
 class Aimv2VisualTokenizer(torch.nn.Module):
