@@ -102,6 +102,9 @@ This work is a collaborative effort by the Alibaba Ovis team. We would also like
 - [Parrot: Multilingual Visual Instruction Tuning](https://arxiv.org/abs/2406.02539)
 - [Wings: Learning Multimodal LLMs without Text-only Forgetting](https://arxiv.org/abs/2406.03496)
 
+## 🔥 We are hiring!
+We are looking for both interns and full-time researchers to join our team, focusing on multimodal understanding, generation, reasoning, AI agents, and unified multimodal models. If you are interested in exploring these exciting areas, please reach out to us at qingguo.cqg@alibaba-inc.com.
+
 ## License
 This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) (SPDX-License-Identifier: Apache-2.0).
 
