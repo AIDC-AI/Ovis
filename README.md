@@ -57,6 +57,13 @@ Please stay tuned for updates in the near future.
 ## Citation
 If you find Ovis useful, please cite the paper
 ```
+@article{lu2025ovis25technicalreport,
+  title={Ovis2.5 Technical Report}, 
+  author={Shiyin Lu and Yang Li and Yu Xia and Yuwei Hu and Shanshan Zhao and Yanqing Ma and Zhichao Wei and Yinglun Li and Lunhao Duan and Jianshan Zhao and Yuxuan Han and Haijun Li and Wanying Chen and Junke Tang and Chengkun Hou and Zhixing Du and Tianli Zhou and Wenjie Zhang and Huping Ding and Jiahe Li and Wen Li and Gui Hu and Yiliang Gu and Siran Yang and Jiamang Wang and Hailong Sun and Yibo Wang and Hui Sun and Jinlong Huang and Yuping He and Shengze Shi and Weihong Zhang and Guodong Zheng and Junpeng Jiang and Sensen Gao and Yi-Feng Wu and Sijia Chen and Yuhui Chen and Qing-Guo Chen and Zhao Xu and Weihua Luo and Kaifu Zhang},
+  year={2025},
+  journal={arXiv:2508.11737}
+}
+
 @article{lu2024ovis,
   title={Ovis: Structural Embedding Alignment for Multimodal Large Language Model}, 
   author={Shiyin Lu and Yang Li and Qing-Guo Chen and Zhao Xu and Weihua Luo and Kaifu Zhang and Han-Jia Ye},
