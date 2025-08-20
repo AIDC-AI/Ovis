@@ -185,8 +185,7 @@ Example dataset JSON:
                 "value": "5:9"
             }
         ]
-    },
-    ...
+    }
 ]
 ```
 
