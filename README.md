@@ -94,8 +94,6 @@ In `ovis/serve` we provide three example files:
   python ovis/serve/web_ui.py --model-path AIDC-AI/Ovis2.5-9B --port 8001
   ```
 
----
-
 ### vLLM
 
 Start the vLLM server:
@@ -159,13 +157,11 @@ print("Chat response:\n", chat_response.choices[0].message.content)
 * **`mm_processor_kwargs.images_kwargs.min_pixels / max_pixels`**
   Controls the resolution range of input images (in total pixel count), balancing accuracy and GPU memory usage.
 
----
 
 ## Model Fine-tuning
 
 Ovis can be fine-tuned using either the provided training code in this repository or via [ms-swift](https://github.com/modelscope/ms-swift).
 
----
 
 ### 1. Fine-tuning with in-repo code
 
@@ -189,8 +185,8 @@ Example dataset JSON:
                 "value": "5:9"
             }
         ]
-    },
-    ...
+    }
+    // ...
 ]
 ```
 
@@ -224,8 +220,6 @@ bash scripts/run_ovis2_5_sft.sh
 ```
 
 This script configures the DeepSpeed engine, dataset paths, and model checkpoint initialization. Modify it to match your own dataset and environment.
-
----
 
 ### 2. Fine-tuning with ms-swift
 
