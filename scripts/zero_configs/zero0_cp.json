@@ -1,0 +1,19 @@
+{
+    "compile": {
+        "enabled": true,
+        "backend": "inductor"
+    },
+    "fp16": {
+        "enabled": false
+    },
+    "bf16": {
+        "enabled": "auto"
+    },
+    "train_micro_batch_size_per_gpu": "auto",
+    "train_batch_size": "auto",
+    "gradient_accumulation_steps": "auto",
+    "gradient_clipping": "auto",
+    "zero_optimization": {
+        "stage": 0
+    }
+}

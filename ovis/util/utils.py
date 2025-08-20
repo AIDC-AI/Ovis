@@ -1,10 +1,16 @@
 import os
 from importlib import import_module
+import torch
 
 
 def rank0_print(*args):
     if int(os.getenv("LOCAL_PROCESS_RANK", os.getenv("LOCAL_RANK", 0))) == 0:
         print(*args)
+
+
+def rankN_print(*args):
+    rank = int(os.getenv("LOCAL_PROCESS_RANK", os.getenv("LOCAL_RANK", 0)))
+    print(f'<R{rank}>', *args)
 
 
 def smart_unit(num):
@@ -14,13 +20,13 @@ def smart_unit(num):
         return f'{num / 1.0e6:.2f}M'
 
 
-def import_class_from_string(full_class_string):
-    # Split the path to get separate module and class names
-    module_path, _, class_name = full_class_string.rpartition('.')
 
-    # Import the module using the module path
-    module = import_module(module_path)
+def replace_torch_load_with_weights_only_false():
+    original_torch_load = torch.load
 
-    # Get the class from the imported module
-    cls = getattr(module, class_name)
-    return cls
+    def torch_load_with_weights_only_false(*args, **kwargs):
+        kwargs["weights_only"] = False
+        return original_torch_load(*args, **kwargs)
+
+    # 替换 torch.load
+    torch.load = torch_load_with_weights_only_false

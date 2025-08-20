@@ -1,16 +1,10 @@
-# copied from https://huggingface.co/apple/aimv2-huge-patch14-448
-from typing import Any
+from typing import Any, Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
-__all__ = ["AIMv2Config"]
 
-
-class AIMv2Config(PretrainedConfig):
-    """This is the configuration class to store the configuration of an [`AIMv2Model`].
-
-    Instantiating a configuration with the defaults will yield a similar configuration
-    to that of the [apple/aimv2-large-patch14-224](https://huggingface.co/apple/aimv2-large-patch14-224).
+class Siglip2NavitConfig(PretrainedConfig):
+    """This is the configuration class to store the configuration of an [`Siglip2Navit`].
 
     Args:
         hidden_size: Dimension of the hidden representations.
@@ -29,22 +23,27 @@ class AIMv2Config(PretrainedConfig):
         kwargs: Keyword arguments for the [`PretrainedConfig`].
     """
 
-    model_type: str = "aimv2"
+    model_type: str = "siglip2_navit"
 
     def __init__(
         self,
         hidden_size: int = 1024,
-        intermediate_size: int = 2816,
+        intermediate_size: int = 4096,
         num_hidden_layers: int = 24,
-        num_attention_heads: int = 8,
+        num_attention_heads: int = 16,
         num_channels: int = 3,
-        image_size: int = 224,
-        patch_size: int = 14,
-        rms_norm_eps: float = 1e-5,
+        num_patches: int = -1,
+        image_size: int = 512,
+        patch_size: int = 16,
+        hidden_act: str="gelu_pytorch_tanh",
+        layer_norm_eps: float = 1e-6,
         attention_dropout: float = 0.0,
-        projection_dropout: float = 0.0,
-        qkv_bias: bool = False,
-        use_bias: bool = False,
+        hidden_stride: int = 2,
+        window_size: int = 112,
+        fullatt_block_indexes: Optional[list] = None,
+        temporal_patch_size: int = 1,
+        preserve_original_pe: bool = True,
+        use_rope: bool = True,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -53,11 +52,17 @@ class AIMv2Config(PretrainedConfig):
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
         self.num_channels = num_channels
+        self.num_patches = num_patches
         self.patch_size = patch_size
         self.image_size = image_size
+        self.hidden_act = hidden_act
         self.attention_dropout = attention_dropout
-        self.rms_norm_eps = rms_norm_eps
+        self.layer_norm_eps = layer_norm_eps
+        self.hidden_stride = hidden_stride
+        self.window_size = window_size
+        self.fullatt_block_indexes = fullatt_block_indexes
+        self.temporal_patch_size = temporal_patch_size
+        self.preserve_original_pe = preserve_original_pe
+        self.use_rope = use_rope
 
-        self.projection_dropout = projection_dropout
-        self.qkv_bias = qkv_bias
-        self.use_bias = use_bias
+__all__ = ["Siglip2NavitConfig"]

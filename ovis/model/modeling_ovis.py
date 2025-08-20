@@ -1,26 +1,24 @@
 import logging
+import math
 import os
-
-from packaging import version
 from datetime import datetime
 from importlib import import_module
-from typing import List, Union, Callable, Optional, Dict
+from typing import List, Union, Callable, Optional, Dict, Tuple
 
 import PIL.Image
 import deepspeed
+import numpy as np
 import torch
-import transformers
 from torch import Tensor
 from torch.nn import init
-from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM
-from transformers.cache_utils import HybridCache
+from transformers import PreTrainedModel, AutoConfig, AutoModel, AutoTokenizer, AutoModelForCausalLM, AutoImageProcessor
 from transformers.generation.utils import GenerateOutput
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled, deepspeed_config
 
 from ovis.model.configuration_ovis import OvisConfig
 from ovis.model.conversation_formatter import ConversationFormatter
-from ovis.util.constants import IGNORE_ID, BEGIN_LINE, END_LINE, IMAGE_ATOM_ID, IMAGE_INDICATOR_IDS, \
-    IMAGE_TOKEN_ID
+from ovis.util.constants import IGNORE_ID, BEGIN_LINE, END_LINE, VISUAL_ATOM_ID, INDICATOR_IDS, \
+    IMAGE_TOKEN_ID, VIDEO_TOKEN_ID
 from ovis.util.utils import rank0_print
 
 
@@ -35,40 +33,189 @@ class VisualEmbedding(torch.nn.Embedding):
         self._fill_padding_idx_with_zero()
 
 
+class VisualTokenizer(torch.nn.Module):
+    def __init__(self, vit, visual_vocab_size, image_processor_name_or_path, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vit = vit
+        self.image_processor = AutoImageProcessor.from_pretrained(image_processor_name_or_path, do_center_crop=False)
+        head_dim = visual_vocab_size - len(INDICATOR_IDS)
+        self.head = torch.nn.Sequential(
+            torch.nn.Linear(self.vit.config.hidden_size * self.vit.config.hidden_stride ** 2, head_dim, bias=False),
+            torch.nn.LayerNorm(head_dim)
+        )
+
+    def _get_last_block(self):
+        return self.vit._get_block(-1)
+
+    def _encode(self, pixel_values, grid_thws):
+        output = self.vit(pixel_values, grid_thws, output_hidden_states=True, return_dict=True)
+        features = output.hidden_states[-1]
+        seq_len, _ = features.shape
+        features = features.reshape(seq_len // (self.vit.config.hidden_stride ** 2), -1)
+        return features
+
+    # Adapted from qwen2_vl
+    @staticmethod
+    def smart_resize(
+        height: int, width: int, factor: int = 28, min_pixels: int = 448 * 448, max_pixels: int = 1344 * 1792
+    ):
+        """Rescales the image so that the following conditions are met:
+        1. Both dimensions (height and width) are divisible by 'factor'.
+        2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
+        3. The aspect ratio of the image is maintained as closely as possible.
+        """
+
+        if height < factor or width < factor:
+            logging.warning(
+                f"Resizing image from ({height=}, {width=}) because a dimension is smaller than {factor}."
+            )
+            if height < width:
+                width = round(factor / height * width)
+                height = factor
+            else:
+                height = round(factor / width * height)
+                width = factor
+
+        elif max(height, width) / min(height, width) > 200:
+            logging.warning(
+                f"Resizing image from ({height=}, {width=}) because the aspect ratio is larger than 200"
+            )
+            if height > width:
+                height = 200 * width
+            else:
+                width = 200 * height
+
+        h_bar = round(height / factor) * factor
+        w_bar = round(width / factor) * factor
+        if h_bar * w_bar > max_pixels:
+            beta = math.sqrt((height * width) / max_pixels)
+            h_bar = math.floor(height / beta / factor) * factor
+            w_bar = math.floor(width / beta / factor) * factor
+        elif h_bar * w_bar < min_pixels:
+            beta = math.sqrt(min_pixels / (height * width))
+            h_bar = math.ceil(height * beta / factor) * factor
+            w_bar = math.ceil(width * beta / factor) * factor
+        return h_bar, w_bar
+
+    def preprocess(
+        self,
+        image: Optional[PIL.Image.Image] = None,
+        video: Optional[List[PIL.Image.Image]] = None,
+        min_pixels: Optional[int] = None,
+        max_pixels: Optional[int] = None
+    ):
+        patch_size = self.vit.config.patch_size
+        temporal_patch_size = self.vit.config.temporal_patch_size
+        hidden_stride = self.vit.config.hidden_stride
+        assert (image is None) ^ (video is None), "Invalid input: expect either image or video"
+        if image is not None:
+            images = [image]
+        else:
+            images = video
+        images = [image.convert("RGB") if image.mode != 'RGB' else image for image in images]
+        width, height = images[0].size
+        processed_images = []
+        for image in images:
+            resized_height, resized_width = self.smart_resize(
+                height,
+                width,
+                factor=patch_size * hidden_stride,
+                min_pixels=min_pixels,
+                max_pixels=max_pixels,
+            )
+            new_size = dict(height=resized_height, width=resized_width)
+            new_image = self.image_processor.preprocess(image, size=new_size, return_tensors="np")['pixel_values'][0]
+            processed_images.append(new_image)
+
+        patches = np.array(processed_images)
+        if patches.shape[0] % temporal_patch_size != 0:
+            repeats = np.repeat(patches[-1][np.newaxis], temporal_patch_size - 1, axis=0)
+            patches = np.concatenate([patches, repeats], axis=0)
+        channel = patches.shape[1]
+        grid_t = patches.shape[0] // temporal_patch_size
+        grid_h, grid_w = resized_height // patch_size, resized_width // patch_size
+        grid_thw = torch.tensor([[grid_t, grid_h, grid_w]])
+
+        patches = patches.reshape(
+            grid_t,
+            temporal_patch_size,
+            channel,
+            grid_h // hidden_stride,
+            hidden_stride,
+            patch_size,
+            grid_w // hidden_stride,
+            hidden_stride,
+            patch_size,
+        )
+        patches = patches.transpose(0, 3, 6, 4, 7, 2, 1, 5, 8)
+        flatten_patches = patches.reshape(
+            grid_t * grid_h * grid_w, channel * temporal_patch_size * patch_size * patch_size
+        )
+        flatten_patches = torch.tensor(flatten_patches)
+
+        return flatten_patches, grid_thw
+
+    def get_dummy_visual_inputs(self):
+        pixel_values = torch.zeros((2 * 2, 3 * self.vit.config.patch_size ** 2), dtype=self.vit.dtype,
+                                   device=self.vit.device)
+        grid_thws = torch.tensor([[1, 2, 2]], dtype=torch.long, device=self.vit.device)
+        return pixel_values, grid_thws
+
+    def forward(
+        self, pixel_values, grid_thws
+    ) -> torch.Tensor:  # [BatchSize, ImageShape] -> [BatchSize, #Token, VocabSize]
+        features = self._encode(pixel_values, grid_thws)
+        logits = self.head(features)
+        tokens = torch.softmax(logits, dim=-1, dtype=torch.float32).to(logits.dtype)
+        # tokens' shape is [#Token, VocabSize-2], so padding with [#Token, 2], after
+        # which, tokens' shape should become [#Token, VocabSize];
+        token_len, _ = tokens.shape
+        padding_tensor = torch.zeros(size=(token_len, len(INDICATOR_IDS)),
+                                     dtype=tokens.dtype,
+                                     device=tokens.device,
+                                     layout=tokens.layout,
+                                     requires_grad=False)
+        tokens = torch.cat((tokens, padding_tensor), dim=1)
+        return tokens
+
+    def get_monitor_tensors(self):
+        monitor_tensors = dict(
+            vit_bottom=self.vit._get_attn_weight(0),
+            vit_top=self.vit._get_attn_weight(-1),
+            head=self.head[0].weight,
+            pos_embed=self.vit._get_pose_embed()
+        )
+        return monitor_tensors
+
+
 class OvisPreTrainedModel(PreTrainedModel):
     config_class = OvisConfig
     base_model_prefix = "ovis"
 
 
 class Ovis(OvisPreTrainedModel):
+    _supports_flash_attn_2 = True
 
     def __init__(self, config: OvisConfig, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         if kwargs.get('train_from_scratch'):
             self.llm = kwargs['llm']
-            self.generation_config = self.llm.generation_config
-            self.config.llm_config = self.llm.config
-            self.config.hidden_size = self.llm.config.hidden_size  # for deepspeed auto configuration
             self.text_tokenizer = kwargs['text_tokenizer']
             self.visual_tokenizer = kwargs['visual_tokenizer']
-            self.config.visual_tokenizer_config = self.visual_tokenizer.config
         else:
-            attn_kwargs = dict()
-            if self.config.llm_attn_implementation:
-                attn_kwargs['attn_implementation'] = self.config.llm_attn_implementation
-            self.llm = AutoModelForCausalLM.from_config(self.config.llm_config, **attn_kwargs)
+            self.llm = AutoModelForCausalLM.from_config(self.config.llm_config)
             assert self.config.hidden_size == self.llm.config.hidden_size, "hidden size mismatch"
             self.text_tokenizer = AutoTokenizer.from_pretrained(self.config.name_or_path)
-            self.visual_tokenizer = AutoModel.from_config(self.config.visual_tokenizer_config,
-                                                          image_processor_name_or_path=self.config.name_or_path)
-
+            self.visual_tokenizer = VisualTokenizer(vit=AutoModel.from_config(self.config.vit_config),
+                                                    visual_vocab_size=self.config.visual_vocab_size,
+                                                    image_processor_name_or_path=self.config.name_or_path)
         # initialize vte
         if is_deepspeed_zero3_enabled():
             with deepspeed.zero.Init(config_dict_or_path=deepspeed_config()):
-                self.vte = VisualEmbedding(self.config.visual_tokenizer_config.vocab_size, self.config.hidden_size)
+                self.vte = VisualEmbedding(self.config.visual_vocab_size, self.config.hidden_size)
         else:
-            self.vte = VisualEmbedding(self.config.visual_tokenizer_config.vocab_size, self.config.hidden_size,
-                                       device=self.visual_tokenizer.device, dtype=self.visual_tokenizer.dtype)
+            self.vte = VisualEmbedding(self.config.visual_vocab_size, self.config.hidden_size,
+                                       device=self.visual_tokenizer.vit.device, dtype=self.visual_tokenizer.vit.dtype)
 
         def _merge_modules(modules_list: tuple):
             merged_modules = []
@@ -76,25 +223,16 @@ class Ovis(OvisPreTrainedModel):
                 merged_modules.extend(modules if modules else [])
             return merged_modules
 
-        self._no_split_modules = _merge_modules((self.llm._no_split_modules, self.visual_tokenizer._no_split_modules))
+        self._no_split_modules = _merge_modules(
+            (self.llm._no_split_modules, self.visual_tokenizer.vit._no_split_modules))
         self._skip_keys_device_placement = self.llm._skip_keys_device_placement
         self._keep_in_fp32_modules = _merge_modules(
-            (self.llm._keep_in_fp32_modules, self.visual_tokenizer._keep_in_fp32_modules))
-        self.is_parallelizable = all((self.llm.is_parallelizable, self.visual_tokenizer.is_parallelizable))
-        self.supports_gradient_checkpointing = all(
-            (self.llm.supports_gradient_checkpointing, self.visual_tokenizer.supports_gradient_checkpointing))
-        self._supports_flash_attn_2 = True
-        self._supports_sdpa = all((self.llm._supports_sdpa, self.visual_tokenizer._supports_sdpa))
-
-    def get_text_tokenizer(self):
-        return self.text_tokenizer
-
-    def get_visual_tokenizer(self):
-        return self.visual_tokenizer
+            (self.llm._keep_in_fp32_modules, self.visual_tokenizer.vit._keep_in_fp32_modules))
+        self.is_parallelizable = all((self.llm.is_parallelizable, self.visual_tokenizer.vit.is_parallelizable))
+        self.supports_gradient_checkpointing = True
 
     def tie_weights(self):
-        if not self.config.disable_tie_weight:
-            self.get_llm().tie_weights()
+        self.llm.tie_weights()
 
     def re_init_vte(self, mean, std):
         vte = self.get_vte()
@@ -113,21 +251,12 @@ class Ovis(OvisPreTrainedModel):
     def get_monitor_tensors(self):
         monitor_tensors = dict(
             wte=self.get_wte().weight,
-            lm_head=self.get_lm_head().weight,
-            vte=self.get_vte().weight
+            lm_head=self.llm.get_output_embeddings().weight,
+            vte=self.vte.weight
         )
         monitor_tensors.update(
-            {f'visual_tokenizer_{k}': v for k, v in self.get_visual_tokenizer().get_monitor_tensors().items()})
+            {f'visual_tokenizer_{k}': v for k, v in self.visual_tokenizer.get_monitor_tensors().items()})
         return monitor_tensors
-
-    def get_lm_head(self):
-        return self.get_llm().get_output_embeddings()
-
-    def get_llm(self):
-        return self.llm
-
-    def get_vte(self):
-        return self.vte
 
     def get_wte(self):
         return self.llm.get_input_embeddings()
@@ -142,143 +271,81 @@ class Ovis(OvisPreTrainedModel):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
+        pixel_values: Optional[torch.Tensor],
+        grid_thws: Optional[torch.Tensor],
         labels: Optional[torch.Tensor],
-        pixel_values: List[Optional[torch.Tensor]],
         **kwargs
     ):
-        # assert self.training, "`forward` can only be used in training. For inference, use `generate`."
-        _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
-            text_input_ids=input_ids,
-            text_attention_masks=attention_mask,
-            text_labels=labels,
-            pixel_values=pixel_values
+        inputs_embeds = self.merge_multimodal(
+            input_ids=input_ids,
+            pixel_values=pixel_values,
+            grid_thws=grid_thws,
         )
-        return self.llm(inputs_embeds=inputs_embeds, labels=labels, attention_mask=attention_mask, **kwargs)
+        return self.llm(inputs_embeds=inputs_embeds, attention_mask=attention_mask, labels=labels, **kwargs)
 
     def merge_multimodal(
         self,
-        text_input_ids: torch.Tensor,
-        text_attention_masks: torch.Tensor,
-        text_labels: Optional[torch.Tensor],
-        pixel_values: List[Optional[torch.Tensor]],
-        left_padding: bool = False
+        input_ids: torch.Tensor,
+        pixel_values: Optional[torch.Tensor],
+        grid_thws: Optional[torch.Tensor],
     ):
-        input_device = text_input_ids.device
-        visual_vocab_szie = self.get_visual_tokenizer().config.vocab_size
-        visual_indicator_embeds = self.get_vte()(
-            torch.tensor(
-                list(range(visual_vocab_szie - 5, visual_vocab_szie)),
+        placeholder_token_mask = torch.lt(input_ids, 0)
+        multimodal_embeds = self.get_wte()(torch.masked_fill(input_ids, placeholder_token_mask, 0))
+        # We need to create a dummy visual input in two cases:
+        # 1. During training in a distributed setup (e.g., DDP), to ensure that gradients
+        #    for the visual encoder are synchronized, even if the real input is missing.
+        #    This prevents the backward pass from hanging.
+        # 2. When using DeepSpeed ZeRO-3, which shards model parameters. A dummy input
+        #    is required even during evaluation to ensure all model parameters are correctly
+        #    gathered and the forward pass can complete.
+        need_dummy_visual_input = pixel_values is None and (self.training or is_deepspeed_zero3_enabled())
+        if need_dummy_visual_input:
+            pixel_values, grid_thws = self.visual_tokenizer.get_dummy_visual_inputs()
+        if pixel_values is not None:
+            visual_indicator_embeds = self.vte(torch.tensor(
+                list(range(self.config.visual_vocab_size - len(INDICATOR_IDS), self.config.visual_vocab_size)),
                 dtype=torch.long,
-                device=self.get_visual_tokenizer().device
-            )
-        ).to(device=input_device)
+                device=self.vte.weight.device
+            )).to(dtype=multimodal_embeds.dtype, device=multimodal_embeds.device)
+            visual_tokens = self.visual_tokenizer(pixel_values, grid_thws)
+            visual_embeds = self.vte(visual_tokens).to(dtype=multimodal_embeds.dtype, device=multimodal_embeds.device)
+            for i, indicator_id in enumerate(INDICATOR_IDS):
+                multimodal_embeds[input_ids == indicator_id] = visual_indicator_embeds[i]
+            multimodal_embeds[input_ids == VISUAL_ATOM_ID] = visual_embeds
+        if need_dummy_visual_input:
+            multimodal_embeds += visual_embeds.sum() * 0.0 + visual_indicator_embeds.sum() * 0.0
+        return multimodal_embeds
 
-        if self.training:
-            # When training, to be compatible with deepspeed zero, each sample has to include pixel_value tensor.
-            # For text-only sample, one can simply use a full zero tensor as pixel_value, which will be ignored
-            # (see below in this function); so, the gradient will not be affected.
-            num_images = [x.shape[0] for x in pixel_values]
-            visual_tokens = self.visual_tokenizer(torch.cat([x for x in pixel_values], dim=0))
-            visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype, device=input_device),
-                                        split_size_or_sections=num_images, dim=0)
-            visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
-                                           split_size_or_sections=num_images, dim=0)
-            visual_labels = [torch.full(x.shape, IGNORE_ID, dtype=torch.long, device=input_device) for x in
-                             visual_input_ids]
-        else:
-            # When inference, sample can include only text with `None` pixel_value
-            num_images = [x.shape[0] if x is not None else 0 for x in pixel_values]
-            if sum(num_images) > 0:
-                visual_tokens = self.visual_tokenizer(torch.cat([x for x in pixel_values if x is not None], dim=0))
-                visual_embeds = torch.split(self.get_vte()(visual_tokens).to(dtype=self.dtype, device=input_device),
-                                            split_size_or_sections=num_images, dim=0)
-                visual_input_ids = torch.split(torch.argmax(visual_tokens, dim=-1).to(device=input_device),
-                                               split_size_or_sections=num_images, dim=0)
-                visual_labels = [torch.full(x.shape, IGNORE_ID, dtype=torch.long, device=input_device) for x in
-                                 visual_input_ids]
-            else:
-                # just placeholders
-                visual_embeds = [None] * len(num_images)
-                visual_input_ids = [None] * len(num_images)
-                visual_labels = [None] * len(num_images)
-        # just placeholders
-        if text_labels is None:
-            text_labels = torch.full(text_input_ids.shape, IGNORE_ID, dtype=torch.long, device=input_device)
-
-        input_embeds = []
-        attention_masks = []
+    def _merge_inputs(
+        self, raw_input_ids, raw_labels, placeholder_indexes, grid_thws, indicator_begin_id, indicator_end_id
+    ):
+        input_ids = []
         labels = []
-        for text_input_id, text_label, text_attention_mask, visual_embed, visual_input_id, visual_label in zip(
-                text_input_ids, text_labels, text_attention_masks, visual_embeds, visual_input_ids, visual_labels
-        ):
-            placeholder_token_mask = torch.lt(text_input_id, 0)
-            text_embed = self.get_wte()(torch.masked_fill(text_input_id, placeholder_token_mask, 0))
-            for i, indicator_id in enumerate(IMAGE_INDICATOR_IDS):
-                text_embed[text_input_id == indicator_id] = visual_indicator_embeds[i]
-            image_atom_positions = torch.where(torch.eq(text_input_id, IMAGE_ATOM_ID))[0].tolist()
-            if len(image_atom_positions) > 0:
-                input_embed_parts = []
-                attention_mask_parts = []
-                label_parts = []
-                prev_image_atom_position = -1
-                for index, image_atom_position in enumerate(image_atom_positions):
-                    input_embed_parts.append(
-                        text_embed[prev_image_atom_position + 1:image_atom_position, :])
-                    label_parts.append(
-                        text_label[prev_image_atom_position + 1:image_atom_position])
-                    attention_mask_parts.append(
-                        text_attention_mask[prev_image_atom_position + 1:image_atom_position])
-                    input_embed_parts.append(visual_embed[index])
-                    attention_mask_parts.append(
-                        torch.ones_like(visual_label[index], dtype=torch.bool))
-                    label_parts.append(visual_label[index])
-                    prev_image_atom_position = image_atom_position
-                if prev_image_atom_position + 1 < text_input_id.shape[0]:
-                    input_embed_parts.append(
-                        text_embed[prev_image_atom_position + 1:, :])
-                    attention_mask_parts.append(
-                        text_attention_mask[prev_image_atom_position + 1:])
-                    label_parts.append(
-                        text_label[prev_image_atom_position + 1:])
-                input_embed = torch.cat(input_embed_parts, dim=0)
-                attention_mask = torch.cat(attention_mask_parts, dim=0)
-                label = torch.cat(label_parts, dim=0)
-            else:
-                input_embed = text_embed
-                attention_mask = text_attention_mask
-                label = text_label
-                if self.training:
-                    # Make visual_embed & visual_indicator_embeds involved in the backward graph,
-                    # to be compatible with deepspeed zero and ddp.
-                    input_embed += torch.sum(visual_embed * 0.0) + torch.sum(visual_indicator_embeds * 0.0)
-            input_embeds.append(input_embed)
-            attention_masks.append(attention_mask)
-            labels.append(label)
-
-        batch_input_embeds = self.pad_truncate_sequence(input_embeds, batch_first=True, padding_value=0.0, left_padding=left_padding)
-        batch_attention_mask = self.pad_truncate_sequence(attention_masks, batch_first=True, padding_value=False, left_padding=left_padding)
-        batch_labels = self.pad_truncate_sequence(labels, batch_first=True, padding_value=IGNORE_ID, left_padding=left_padding)
-
-        return visual_input_ids, batch_input_embeds, batch_labels, batch_attention_mask
-
-    def pad_truncate_sequence(self, sequences: List[torch.Tensor], batch_first: bool = True, padding_value: float = 0.0, left_padding: bool = False) -> torch.Tensor:
-        if not left_padding:
-            pad_sequence = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first, padding_value=padding_value)
-            return pad_sequence[:,:self.config.multimodal_max_length]
-        else:
-            pad_sequence = torch.nn.utils.rnn.pad_sequence([i.flip(dims=[0]) for i in sequences],batch_first=True, padding_value=padding_value).flip(dims=[1])
-            return pad_sequence[:,-self.config.multimodal_max_length:]
+        prev_index = 0
+        for placeholder_index, grid_thw in zip(placeholder_indexes, grid_thws):
+            input_ids.extend(raw_input_ids[prev_index:placeholder_index])
+            labels.extend(raw_labels[prev_index:placeholder_index])
+            num_image_atoms = grid_thw.prod().item()
+            num_image_atoms //= self.visual_tokenizer.vit.config.hidden_stride ** 2
+            num_image_atoms //= self.visual_tokenizer.vit.config.temporal_patch_size
+            input_ids.extend([indicator_begin_id] + [VISUAL_ATOM_ID] * num_image_atoms + [indicator_end_id])
+            labels.extend([IGNORE_ID] * (num_image_atoms + 2))
+            prev_index = placeholder_index + 1
+        input_ids.extend(raw_input_ids[prev_index:])
+        labels.extend(raw_labels[prev_index:])
+        return input_ids, labels
 
     def preprocess_inputs(
         self,
         text_or_conversations: Union[List[Dict], str],
-        images: Optional[List[PIL.Image.Image]],
-        max_partition=9,
+        images: Optional[Union[List[PIL.Image.Image], PIL.Image.Image]] = None,
+        videos: Optional[Union[List[List[PIL.Image.Image]], List[PIL.Image.Image]]] = None,
+        min_pixels=448 * 448,
+        max_pixels=1344 * 1792,
         generation_preface='',
         return_labels=False,
-        propagate_exception=True,
         frame_selector=None,
-        frame_selector_kwargs=None
+        # enable_thinking=False,
     ):
         # convert text to conversations
         if isinstance(text_or_conversations, str):
@@ -289,55 +356,76 @@ class Ovis(OvisPreTrainedModel):
         elif isinstance(text_or_conversations, list):
             conversations = text_or_conversations
         else:
-            raise ValueError(f'Invalid type of `text_or_conversations`, expected `List[Dict]` or `str`,'
-                             f' but got {type(text_or_conversations)}')
+            raise ValueError(
+                f'[{datetime.now()}] Invalid type of `text_or_conversations`, expected `List[Dict]` or `str`,'
+                f' but got {type(text_or_conversations)}')
 
+        # select frame
         if frame_selector is not None:
-            frame_selector_kwargs = frame_selector_kwargs or {}
-            conversations, images = frame_selector(conversations=conversations, frames=images, **frame_selector_kwargs)
+            conversations, videos = frame_selector(conversations=conversations, frames=videos, clear_prompt=True)
 
         # format conversations
         prompt, raw_input_ids, raw_labels = self.get_conversation_formatter().format(
             conversations, generation_preface=generation_preface)
+        image_token_indexes = [i for i, v in enumerate(raw_input_ids) if v == IMAGE_TOKEN_ID]
+        video_token_indexes = [i for i, v in enumerate(raw_input_ids) if v == VIDEO_TOKEN_ID]
 
-        # place image placeholders
-        input_ids = []
-        labels = []
-        pixel_values = []
-        invalidate_label = False
-        image_token_indices = [i for i, v in enumerate(raw_input_ids) if v == IMAGE_TOKEN_ID]
-        last_image_token_index = -1
-        for i in range(len(image_token_indices)):
-            head = 0 if i == 0 else image_token_indices[i - 1] + 1
-            tail = image_token_indices[i]
-            last_image_token_index = tail
-            input_ids.extend(raw_input_ids[head:tail])
-            labels.extend(raw_labels[head:tail])
-            try:
-                image = images[i]
-                raw_pixel_values, image_placeholders = self.visual_tokenizer.preprocess_image(
-                    image, max_partition=max_partition)
-            except Exception as e:
-                if propagate_exception:
-                    raise e
-                logging.exception(e)
-                invalidate_label = True
-                raw_pixel_values, image_placeholders = self.visual_tokenizer.mock_input()
-            input_ids.extend(image_placeholders)
-            labels.extend([IGNORE_ID] * len(image_placeholders))
-            pixel_values.append(raw_pixel_values)
-        input_ids.extend(raw_input_ids[last_image_token_index + 1:])
-        labels.extend(raw_labels[last_image_token_index + 1:])
+        # merge inputs
+        input_ids, labels = raw_input_ids, raw_labels
+        pixel_values, grid_thws = None, None
+        if images is not None and videos is not None:
+            raise ValueError(
+                "Multiple visual input data types detected (both `images` and `videos` provided). "
+                "This model supports only one type of visual input data at a time. "
+                "Please provide either `images` or `videos`, but not both."
+            )
+        if min(len(image_token_indexes), len(video_token_indexes)) > 0:
+            raise ValueError(
+                "Multiple visual modality placeholders detected in text (`<image>` and `<video>`). "
+                "The input text can contain placeholders for only one type of visual modality at a time. "
+                "Please use either `<image>` or `<video>` placeholders, but not both."
+            )
+        if images is None and videos is None and max(len(image_token_indexes), len(video_token_indexes)) > 0:
+            raise ValueError(
+                "Visual modality placeholder(s) detected in the input text "
+                "(e.g., `<image>` or `<video>`), but no corresponding visual data (`images` or `videos`) was supplied. "
+                "A visual placeholder requires the corresponding data to be processed. "
+                "To resolve this issue, please either: "
+                "1. Remove the visual placeholder(s) from your input text, OR "
+                "2. Provide the appropriate `images` or `videos` data alongside the text."
+            )
 
-        # return tensors
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-        labels = torch.tensor([IGNORE_ID] * len(labels) if invalidate_label else labels, dtype=torch.long)
-        pixel_values = torch.cat(pixel_values, dim=0) if len(pixel_values) > 0 else None
+        if images is not None:
+            images = images if isinstance(images, list) else [images]
+            pixel_values, grid_thws = zip(
+                *(self.visual_tokenizer.preprocess(image=image, min_pixels=min_pixels, max_pixels=max_pixels)
+                  for image in images)
+            )
+            assert len(image_token_indexes) == len(pixel_values), f"Mismatch in number of image {len(pixel_values)} and `<image>` {len(image_token_indexes)}"
+            input_ids, labels = self._merge_inputs(
+                raw_input_ids, raw_labels, image_token_indexes, grid_thws, INDICATOR_IDS[0], INDICATOR_IDS[1]
+            )
+            pixel_values = torch.cat(pixel_values, dim=0)
+            grid_thws = torch.cat(grid_thws, dim=0)
+        elif videos is not None:
+            videos = videos if isinstance(videos[0], list) else [videos]
+            assert len(videos) == 1, "only support single video"
+            pixel_values, grid_thws = self.visual_tokenizer.preprocess(
+                video=videos[0], min_pixels=min_pixels, max_pixels=max_pixels
+            )
+            assert len(video_token_indexes) == len(videos), f"Mismatch in number of video {len(video_token_indexes)} and `<video>` {len(videos)}"
+            input_ids, labels = self._merge_inputs(
+                raw_input_ids, raw_labels, video_token_indexes, grid_thws, INDICATOR_IDS[2], INDICATOR_IDS[3]
+            )
+
+        input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
 
         if return_labels:
-            return prompt, input_ids, pixel_values, labels
+            assert all([label == IGNORE_ID or label >= 0 for label in labels]), "Invalid labels"
+            labels = torch.tensor(labels, dtype=torch.long).unsqueeze(0)
+            return prompt, input_ids, pixel_values, grid_thws, labels
         else:
-            return prompt, input_ids, pixel_values
+            return prompt, input_ids, pixel_values, grid_thws
 
     def save_pretrained(
         self,
@@ -358,84 +446,157 @@ class Ovis(OvisPreTrainedModel):
                                 state_dict=state_dict,
                                 save_function=save_function,
                                 safe_serialization=safe_serialization)
-        self.get_text_tokenizer().save_pretrained(save_directory)
-        self.get_visual_tokenizer().get_image_processor().save_pretrained(save_directory)
-
-        # uncomment the following will additionally save a separate visual tokenizer
-        # visual_tokenizer_directory = os.path.join(save_directory, 'visual_tokenizer')
-        # self.get_visual_tokenizer().save_pretrained(visual_tokenizer_directory,
-        #                                             is_main_process=is_main_process,
-        #                                             state_dict=None,
-        #                                             save_function=save_function,
-        #                                             safe_serialization=safe_serialization)
-        # self.get_visual_tokenizer().get_image_processor().save_pretrained(visual_tokenizer_directory)
-
-    def _get_hybrid_cache_for_llm(self, batch_size: int, max_cache_len: int):
-        cache_cls = HybridCache
-        llm = self.get_llm()
-
-        if version.parse(transformers.__version__) >= version.parse("4.46.0"):
-            need_new_cache = (
-                not hasattr(llm, "_cache")
-                or (not isinstance(llm._cache, cache_cls))
-                or llm._cache.batch_size != batch_size
-                or llm._cache.max_cache_len < max_cache_len
-            )
-        else:
-            need_new_cache = (
-                not hasattr(llm, "_cache")
-                or (not isinstance(llm._cache, cache_cls))
-                or llm._cache.max_batch_size != batch_size
-                or llm._cache.max_cache_len < max_cache_len
-            )
-
-        if need_new_cache:
-            if hasattr(llm.config, "_pre_quantization_dtype"):
-                cache_dtype = llm.config._pre_quantization_dtype
-            else:
-                cache_dtype = llm.dtype
-            if version.parse(transformers.__version__) >= version.parse("4.46.0"):
-                llm._cache = cache_cls(
-                    config=llm.config,
-                    batch_size=batch_size,
-                    max_cache_len=max_cache_len,
-                    device=llm.device,
-                    dtype=cache_dtype,
-                )
-            else:
-                llm._cache = cache_cls(
-                    config=llm.config,
-                    max_batch_size=batch_size,
-                    max_cache_len=max_cache_len,
-                    device=llm.device,
-                    dtype=cache_dtype,
-                )
-        else:
-            llm._cache.reset()
-        return llm._cache
+        self.text_tokenizer.save_pretrained(save_directory)
+        self.visual_tokenizer.image_processor.save_pretrained(save_directory)
 
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[GenerateOutput, torch.LongTensor]:
-        _, inputs_embeds, labels, attention_mask = self.merge_multimodal(
-            text_input_ids=inputs,
-            text_attention_masks=kwargs.pop('attention_mask'),
-            text_labels=None,
-            pixel_values=kwargs.pop('pixel_values'),
-            left_padding=True
+        attention_mask = torch.ne(inputs, self.text_tokenizer.pad_token_id).to(device=inputs.device)
+        inputs_embeds = self.merge_multimodal(
+            input_ids=inputs,
+            pixel_values=kwargs.pop('pixel_values', None),
+            grid_thws=kwargs.pop('grid_thws', None)
         )
         inputs_embeds = inputs_embeds.detach()
         torch.cuda.empty_cache()
-        if getattr(self.generation_config, 'cache_implementation') == 'hybrid':  # mainly for Gemma2
-            kwargs['past_key_values'] = self._get_hybrid_cache_for_llm(
-                getattr(kwargs, "num_beams", inputs_embeds.shape[0]), kwargs['max_new_tokens'] + inputs_embeds.shape[-2])
-            self.get_llm()._supports_cache_class = True
-            kwargs['cache_implementation'] = None
-
         return self.llm.generate(inputs=None, inputs_embeds=inputs_embeds, attention_mask=attention_mask, **kwargs)
 
+    @torch.no_grad()
+    def chat(
+        self,
+        prompt: str,
+        images: Optional[Union[List[PIL.Image.Image], PIL.Image.Image]] = None,
+        videos: Optional[Union[List[List[PIL.Image.Image]], List[PIL.Image.Image]]] = None,
+        do_sample: bool = False,
+        max_new_tokens: int = 512,
+        enable_thinking: bool = False,
+        thinking_budget: Optional[int] = None,
+        min_pixels: int = 448 * 448,  # Parameter for image preprocessing
+        max_pixels: int = 1792 * 1792,  # Parameter for image preprocessing
+        history: Optional[Dict] = None,
+        **generate_kwargs,  # Allows passing other generation arguments
+    ):
+        """
+        Performs a single turn of conversation, optionally including visual input.
+        Supports a two-phase generation process with a "thinking_budget" for complex reasoning.
+        Args:
+            prompt (str): The user's input prompt.
+            images (Optional): Optional single image or list of images.
+            videos (Optional): Optional single video (list of frames) or list of videos.
+            do_sample (bool): Whether to use sampling during generation.
+            max_new_tokens (int): The maximum number of new tokens to generate in total.
+            enable_thinking (bool): If True, enables the model's Chain-of-Thought process.
+            thinking_budget (Optional[int]): The maximum number of tokens for the "thinking" phase.
+                                            If the model doesn't finish thinking within this budget,
+                                            it will be forced to start generating the final answer.
+            min_pixels (int): Minimum total pixels for image processing.
+            max_pixels (int): Maximum total pixels for image processing.
+            history (Optional[Dict]): Conversation history.
+            **generate_kwargs: Additional arguments for the generation method.
+
+        Returns:
+            Tuple[str, str, Dict]: A tuple containing:
+                - response (str): The final, user-facing response.
+                - thinking (str): The model's internal thought process (if enable_thinking=True).
+                - updated_history (Dict): The updated conversation history.
+        """
+        # Initialize history if starting a new conversation
+        if history is None:
+            history = {"conversations": [], "images": None, "videos": None}
+        conversations = history["conversations"] + [{"from": "human", "value": prompt}]
+        current_images = (images if isinstance(images, list) else [images]) if images is not None else []
+        combined_images = (history["images"] or []) + current_images
+        combined_images = combined_images or None
+        current_videos = (videos if isinstance(videos[0], list) else [videos]) if videos is not None else []
+        combined_videos = (history["videos"] or []) + current_videos
+        combined_videos = combined_videos or None
+    
+        _, initial_input_ids, pixel_values, grid_thws = self.preprocess_inputs(
+            conversations,
+            images=combined_images,
+            videos=combined_videos,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
+            generation_preface="<think>\n\n</think>\n\n" if not enable_thinking else ''
+        )
+        initial_input_ids = initial_input_ids.to(device=self.device)
+        if pixel_values is not None:
+            pixel_values = pixel_values.to(device=self.device, dtype=self.dtype)
+        if grid_thws is not None:
+            grid_thws = grid_thws.to(device=self.device)
+            
+        THINK_END_TOKEN_ID = 151668  # </think>
+        IM_END_TOKEN_ID = 151645  # <|im_end|>
+        common_generate_args = {
+            "pixel_values": pixel_values,
+            "grid_thws": grid_thws,
+            "do_sample": do_sample,
+            "pad_token_id": self.text_tokenizer.pad_token_id,
+            **generate_kwargs,
+        }
+        use_thinking_phase = enable_thinking and thinking_budget is not None and thinking_budget > 0
+        if not use_thinking_phase:
+            generated_ids = self.generate(
+                initial_input_ids,
+                max_new_tokens=max_new_tokens,
+                **common_generate_args
+            )
+        else:
+            # stage1: thinking_budget
+            phase1_output_ids = self.generate(
+                initial_input_ids,
+                max_new_tokens=thinking_budget,
+                **common_generate_args
+            )
+            if IM_END_TOKEN_ID in phase1_output_ids[0]:
+                generated_ids = phase1_output_ids
+            else:
+                intermediate_ids = phase1_output_ids
+                if THINK_END_TOKEN_ID not in intermediate_ids[0]:
+                    early_stop_text = (
+                        "\n\nConsidering the limited time by the user, I have to give the solution "
+                        "based on the thinking directly now.\n</think>\n\n"
+                    )
+                    early_stop_ids = self.text_tokenizer(
+                        early_stop_text, return_tensors="pt", add_special_tokens=False
+                    ).input_ids.to(self.device)
+                    intermediate_ids = torch.cat([intermediate_ids, early_stop_ids], dim=1)
+                # stage2: complete the generation
+                phase1_tokens_consumed = intermediate_ids.shape[1]
+                remaining_tokens = max_new_tokens - phase1_tokens_consumed
+                if remaining_tokens > 0:
+                    combined_input_ids = torch.cat([initial_input_ids, intermediate_ids], dim=1)
+                    phase2_output_ids = self.generate(
+                        combined_input_ids,
+                        max_new_tokens=remaining_tokens,
+                        **common_generate_args
+                    )
+                    generated_ids = torch.cat([intermediate_ids, phase2_output_ids], dim=1)
+                else:
+                    generated_ids = intermediate_ids
+        full_generated_ids_list = generated_ids[0].tolist()
+        thinking, response = "", ""
+        if enable_thinking:
+            try:
+                think_end_idx = full_generated_ids_list.index(THINK_END_TOKEN_ID) + 1
+                thinking_ids = full_generated_ids_list[:think_end_idx]
+                response_ids = full_generated_ids_list[think_end_idx:]
+                thinking = self.text_tokenizer.decode(thinking_ids, skip_special_tokens=True).strip()
+                response = self.text_tokenizer.decode(response_ids, skip_special_tokens=True).strip()
+            except ValueError:
+                response = self.text_tokenizer.decode(full_generated_ids_list, skip_special_tokens=True).strip()
+        else:
+            response = self.text_tokenizer.decode(full_generated_ids_list, skip_special_tokens=True).strip()
+        updated_history = {
+            "conversations": conversations + [{"from": "gpt", "value": response}],
+            "images": combined_images,
+            "videos": combined_videos
+        }
+
+        return response, thinking, updated_history
 
 AutoConfig.register("ovis", OvisConfig)
 AutoModelForCausalLM.register(OvisConfig, Ovis)
