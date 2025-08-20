@@ -31,21 +31,6 @@ class MultimodalDataset(Dataset):
         self.text_max_length = training_args.text_max_length
         self.min_frames = training_args.min_frames
         self.max_frames = training_args.max_frames
-        
-        tmp = (self.training_args.data_info_version,
-            self.training_args.data_name,
-            self.training_args.data_type,
-            self.training_args.min_frames,
-            self.training_args.max_frames,
-            self.training_args.overall_ratio,
-            self.training_args.mix_data_name,
-            self.training_args.single_image_min_pixels,
-            self.training_args.single_image_max_pixels,
-            self.training_args.multiple_image_min_pixels,
-            self.training_args.multiple_image_max_pixels,
-            self.training_args.video_min_pixels,
-            self.training_args.video_max_pixels,
-            self.training_args.mix_ratio)
 
         self.samples = self.load()
 

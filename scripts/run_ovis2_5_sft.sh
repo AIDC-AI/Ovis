@@ -6,7 +6,7 @@ set -e
 EXPNAME="${0##*/}"
 EXPNAME="${EXPNAME%.sh}"
 
-OVIS_CKPT_DIR="AIDC-AI/Ovis2.5-2B"
+OVIS_CKPT_DIR="AIDC-AI/Ovis2.5-9B"
 data_name="geometry3k_local"
 
 CMDARG="--deepspeed scripts/zero_configs/zero1_cp.json \
