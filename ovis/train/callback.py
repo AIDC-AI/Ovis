@@ -1,9 +1,13 @@
+import gc
+import time
+
 import deepspeed
 import torch
+import torch.distributed as dist
 from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl
 
 from ovis.util.constants import END_LINE, BEGIN_LINE
-from ovis.util.utils import rank0_print
+from ovis.util.utils import rankN_print
 
 
 class TuneTauCallback(TrainerCallback):
@@ -20,10 +24,10 @@ class MonitorCallback(TrainerCallback):
         with torch.no_grad():
             with deepspeed.zero.GatheredParameters(model.get_monitor_tensors().values()):
                 for k, v in model.get_monitor_tensors().items():
-                    rank0_print(BEGIN_LINE)
-                    rank0_print(f'{k} @ step {step} with sum: {v.sum().item()} and content: ')
-                    rank0_print(v)
-                    rank0_print(END_LINE)
+                    rankN_print(BEGIN_LINE)
+                    rankN_print(f'{k} @ step {step} with sum: {v.sum().item()} and content: ')
+                    rankN_print(v)
+                    rankN_print(END_LINE)
 
     def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         model = kwargs['model']

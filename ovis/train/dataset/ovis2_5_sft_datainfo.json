@@ -1,0 +1,8 @@
+{
+    "geometry3k_local": {
+        "meta_file": "path/to/geometry3k_local.json",
+        "storage_type": "hybrid",
+        "data_format": "conversation",
+        "image_dir": "path/to/images/"
+    }
+}

@@ -7,7 +7,7 @@ from typing import Dict
 import torch
 
 from ovis.train.dataset.multimodal_dataset import MultimodalDataset
-from ovis.util.constants import VIDEO_TOKEN, IMAGE_TOKEN
+from ovis.util.constants import VIDEO_TOKEN, IMAGE_TOKEN, IGNORE_ID
 from ovis.util.utils import rank0_print
 
 
@@ -23,68 +23,72 @@ class ConversationDataset(MultimodalDataset):
 
     def __getitem__(self, i: int) -> Dict[str, torch.Tensor]:
         sample = self.samples[i]
-        conversations = copy.deepcopy(sample["conversations"])
+        conversations = sample["conversations"]
 
+        # try:
         images = None
-        max_partition = sample.get('max_partition', None)
-        multimodal_type = "text"
+        videos = None
+        n_image_or_frame = 0
         if 'image' in sample:
-            multimodal_type = "single_image"
+            images = []
             image_paths = sample['image']
             if isinstance(image_paths, str):
                 image_paths = [image_paths]
-            images = []
             for image_path in image_paths:
-                image, e = self.read_image(image_path)
-                if image is None:
-                    logging.warning(
-                        f'reading image failed with index: {i}, image path: {image_path}, and exception: {e}')
-                    images = None
-                    break
+                image, last_e = self.read_image(image_path)
+                assert image is not None, f"Failed to read image from {image_path}"
                 images.append(image)
-            if images and len(images) > 1:
-                multimodal_type = "multiple_image"
-        elif "video" in sample or "video_frames" in sample:
-            multimodal_type = "video"
-            images, e = self.read_video(sample, min_frames=self.min_frames, max_frames=self.max_frames)
-            if images:
-                num_video_token = 0
-                for conv in conversations:
-                    if conv['from'] == 'human':
-                        num_video_token += conv['value'].count(VIDEO_TOKEN)
-                        conv['value'] = conv['value'].replace(VIDEO_TOKEN, '\n'.join([IMAGE_TOKEN] * len(images)))
-                if num_video_token != 1:
-                    images = None
-                    logging.warning(f'invalid sample (currently, only supports single <video>): {json.dumps(sample)}')
-            else:
-                logging.warning(
-                    f'reading video failed with index: {i}, and exception: {e} in sample: {json.dumps(sample)}')
+            n_image_or_frame = len(images)
+        elif 'video' in sample or 'video_frames' in sample:
+            video, last_e = self.read_video(sample, min_frames=self.min_frames, max_frames=self.max_frames)
+            video_path = sample.get('video') or sample.get('video_frames')
+            assert video is not None, f"Failed to read video from {video_path}"
+            videos = [video]
+            n_image_or_frame = len(video)
 
-        conv_text = '\n'.join(conv['value'] for conv in conversations)
-        if multimodal_type == "text":
-            assert conv_text.count(IMAGE_TOKEN) == 0, f'invalid `IMAGE_TOKEN` in sample: {sample}'
+        if images is None and videos is None:
+            min_pixels = 0
+            max_pixels = 0
+        elif videos is not None:
+            min_pixels = self.training_args.video_min_pixels
+            max_pixels = self.training_args.video_max_pixels
+        elif len(images) == 1:
+            min_pixels = self.training_args.single_image_min_pixels
+            max_pixels = self.training_args.single_image_max_pixels
         else:
-            assert images is None or conv_text.count(IMAGE_TOKEN) == len(images), \
-                f'mismatch between #IMAGE_TOKEN and #images in sample: {json.dumps(sample)}'
-            max_partition = max_partition or self.max_partitions[multimodal_type]
+            min_pixels = self.training_args.multiple_image_min_pixels
+            max_pixels = self.training_args.multiple_image_max_pixels
 
-        prompt, input_ids, pixel_values, labels = self.model.preprocess_inputs(
+        if min_pixels < 0:
+            min_pixels = self.training_args.single_image_min_pixels
+        if max_pixels < 0:
+            max_pixels = max(min_pixels, self.training_args.single_image_max_pixels // n_image_or_frame)
+
+        prompt, input_ids, pixel_values, grid_thws, labels = self.model.preprocess_inputs(
             conversations,
-            images,
-            max_partition=max_partition,
+            images=images,
+            videos=videos,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
             generation_preface=None,
             return_labels=True,
-            propagate_exception=False
         )
-
         if pixel_values is None:
-            pixel_values, _ = self.visual_tokenizer.mock_input()
+            input_ids, pixel_values, grid_thws, labels = self.truncate_inputs(
+                input_ids, pixel_values, grid_thws, labels, max_length=self.training_args.text_max_length
+            )
+        else:
+            input_ids, pixel_values, grid_thws, labels = self.truncate_inputs(
+                input_ids, pixel_values, grid_thws, labels, max_length=self.training_args.multimodal_max_length
+            )
+        assert self.text_tokenizer.pad_token_id not in input_ids, \
+            "The sample's text contains a padding token: `{self.text_tokenizer.pad_token}`"
 
-        input_ids = input_ids[:self.text_max_length]
-        labels = labels[:self.text_max_length]
-
+        del sample
         return dict(
-            pixel_values=pixel_values,
             input_ids=input_ids,
+            pixel_values=pixel_values,
+            grid_thws=grid_thws,
+            attention_mask=torch.full_like(input_ids, fill_value=True, dtype=torch.bool),
             labels=labels
         )
