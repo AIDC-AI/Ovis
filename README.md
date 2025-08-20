@@ -170,7 +170,7 @@ Ovis can be fine-tuned using either the provided training code in this repositor
 The training dataset is stored as a **JSON list**, where each element corresponds to a single sample.
 Example dataset JSON:
 
-```json
+```jsonc
 [
     {
         "id": 1354,
@@ -185,8 +185,8 @@ Example dataset JSON:
                 "value": "5:9"
             }
         ]
-    }
-    // ...
+    },
+    ...
 ]
 ```
 
