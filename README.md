@@ -18,6 +18,9 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
   <img style="max-width: 100%;" src="docs/Ovis25_arch.png" alt="Ovis Illustration"/>
 </div>
 
+## 🔥 We are hiring!
+We are looking for both interns and full-time researchers to join our team, focusing on multimodal understanding, generation, reasoning, AI agents, and unified multimodal models. If you are interested in exploring these exciting areas, please reach out to us at qingguo.cqg@alibaba-inc.com.
+
 ## Release
 - [25/08/15] 🔥 Launch of [Ovis2.5-2B/9B](https://huggingface.co/AIDC-AI/Ovis2.5-9B), featuring native-resolution visual perception, enhanced reflective reasoning (*thinking mode*), and leading performance across STEM, chart analysis, grounding, and video understanding.
 - [25/03/25] 🔥 Announcing quantized versions of Ovis2 series, covering [Ovis2-2/4/8/16/34B](https://huggingface.co/AIDC-AI/Ovis2-34B-GPTQ-Int4)!
@@ -40,7 +43,6 @@ Ovis (Open VISion) is a novel Multimodal Large Language Model (MLLM) architectur
   - [Model Fine-tuning](#model-fine-tuning)
   - [Citation](#citation)
   - [Team](#team)
-  - [🔥 We are hiring!](#we-are-hiring)
   - [License](#license)
   - [Disclaimer](#disclaimer)
 
@@ -259,9 +261,6 @@ If you find Ovis useful, please cite the paper
 This work is a collaborative effort by the Alibaba Ovis team. We would also like to provide links to the following MLLM papers from our team:
 - [Parrot: Multilingual Visual Instruction Tuning](https://arxiv.org/abs/2406.02539)
 - [Wings: Learning Multimodal LLMs without Text-only Forgetting](https://arxiv.org/abs/2406.03496)
-
-## 🔥 We are hiring!
-We are looking for both interns and full-time researchers to join our team, focusing on multimodal understanding, generation, reasoning, AI agents, and unified multimodal models. If you are interested in exploring these exciting areas, please reach out to us at qingguo.cqg@alibaba-inc.com.
 
 ## License
 This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) (SPDX-License-Identifier: Apache-2.0).
