@@ -80,9 +80,7 @@ pip install -e .
 For `vLLM`:
 
 ```bash
-git clone https://github.com/vllm-project/vllm.git
-cd vllm
-VLLM_USE_PRECOMPILED=1 uv pip install .
+pip install vllm==0.10.2 --extra-index-url https://wheels.vllm.ai/0.10.2/
 ```
 
 ## Inference
