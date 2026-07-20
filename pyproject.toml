@@ -1,0 +1,122 @@
+[tool.poetry]
+name = "ovis"
+version = "2.0.0"
+description = "A vision-language model framework"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "ovis"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+torch = "2.4.0"
+transformers = "4.46.2"
+tokenizers = "0.20.3"
+sentencepiece = "0.1.99"
+pyarrow = "18.0.0"
+accelerate = "1.1.0"
+pydantic = "2.8.2"
+markdown2 = {extras = ["all"], version = "*"}
+numpy = "1.24.3"
+scikit-learn = "1.2.2"
+requests = "*"
+httpx = "*"
+uvicorn = "*"
+fastapi = "0.112.4"
+einops = "0.6.1"
+einops-exts = "0.0.4"
+timm = "0.6.13"
+tiktoken = "*"
+transformers-stream-generator = "0.0.4"
+scipy = "*"
+pandas = "*"
+torchaudio = "*"
+# xformers = "*"  # Commented out due to build issues
+pillow = "10.3.0"
+deepspeed = "0.15.4"
+pysubs2 = "1.7.2"
+trl = "0.12.1"
+moviepy = "1.0.3"
+gradio = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^5.0.0"
+pytest-mock = "^3.14.0"
+
+[tool.poetry.scripts]
+test = "pytest:main"
+tests = "pytest:main"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--ignore=docs",
+    "--ignore=build",
+    "--ignore=dist",
+    "--cov=ovis",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=0",  # Set to 0 for initial setup, change to 80 for actual testing
+    "-vv",
+    "--tb=short",
+    "--strict-config",
+    "--disable-warnings"
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Tests that take a long time to run"
+]
+norecursedirs = [".git", ".tox", "dist", "build", "*.egg", "__pycache__"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+
+[tool.coverage.run]
+source = ["ovis"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/distutils/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/migrations/*",
+    "*/__init__.py"
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 0  # TODO: Change to 80 once actual tests are written
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod"
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
