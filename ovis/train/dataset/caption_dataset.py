@@ -6,7 +6,7 @@ import pandas
 import torch
 
 from ovis.train.dataset.multimodal_dataset import MultimodalDataset
-from ovis.util.constants import IMAGE_TOKEN, IGNORE_ID
+from ovis.util.constants import IMAGE_TOKEN, IGNORE_ID, VISUAL_ATOM_ID, INDICATOR_IDS
 from ovis.util.utils import rank0_print
 
 
@@ -49,9 +49,9 @@ class CaptionDataset(MultimodalDataset):
             input_ids = head_ids + image_placeholders + tail_ids + text_ids
             labels = [IGNORE_ID] * (len(input_ids) - len(text_ids)) + text_ids
             assert self.text_tokenizer.pad_token_id not in input_ids, \
-                "The sample's text contains a padding token: `{self.text_tokenizer.pad_token}`"
+                f"The sample's text contains a padding token: `{self.text_tokenizer.pad_token}`"
         except Exception as e:
-            logging.exception(f'processing smaple failed with i: {i}, idx: {idx}, image_path: {image_path}')
+            logging.exception(f'processing sample failed with i: {i}, image_path: {image_path}')
             pixel_values, grid_thws = None, None
             input_ids = [0]
             labels = [IGNORE_ID]

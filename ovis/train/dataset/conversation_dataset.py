@@ -82,7 +82,7 @@ class ConversationDataset(MultimodalDataset):
                 input_ids, pixel_values, grid_thws, labels, max_length=self.training_args.multimodal_max_length
             )
         assert self.text_tokenizer.pad_token_id not in input_ids, \
-            "The sample's text contains a padding token: `{self.text_tokenizer.pad_token}`"
+            f"The sample's text contains a padding token: `{self.text_tokenizer.pad_token}`"
 
         del sample
         return dict(
